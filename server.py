@@ -1,64 +1,67 @@
 
-import rpyc
-import json
+import hashlib
 import zmq
+import netifaces as ni
+import pickle
 
-class Chord(rpyc.Service):
-    exposed_version = "1.0.0"
+HOST = '0.0.0.0'
+PORT = '8002'
+
+class Node():
+    def __init__(self):
+        self.ip = self.get_ip()
+        self.id = self.get_id(self.ip)
+        self.successor_id = None
+        self.successor_ip = None
+        self.antecessor_id = None
+        self.antecessor_ip = None
+        self.context = zmq.Context(io_threads= 1)
+        self.get_in()
+        self.finger_table = [] # [("id1", "ip1"), ("id2", "ip2")]
+        self.my_objects = {} # {"id1": "tal lugar", "id2": "mas cual lugar"}
+        self.update_finger_table()
+        """ 
+        self.socket_to_successor = self.context.socket(zmq.PUSH)
+        self.socket_from_antecessor = self.context.socket(zmq.PULL)
+        self.socket_from_antecessor.bind('tcp://' + self.antecessor_ip + ':5555')
+        """
+
+    # get ip of the pc
+    def get_ip(self) -> str:
+        interfaces = ni.interfaces()
+        if 'vmnet1' in interfaces: 
+            return ni.ifaddresses('vmnet1')[ni.AF_LINK][0]['addr']
+        elif 'vmnet8' in interfaces: 
+            return ni.ifaddresses('vmnet8')[ni.AF_LINK][0]['addr']
+        elif 'enp3s0f1' in interfaces: 
+            return ni.ifaddresses('enp3s0f1')[ni.AF_LINK][0]['addr']
+        else:
+            return ni.ifaddresses(interfaces[0])[ni.AF_LINK][0]['addr']
+
+    # calculate id using sha hash
+    def get_id(self, ip:int)-> str:
+        sha = hashlib.sha1()
+        sha.update(ip.encode('ascii'))
+        return  int(sha.hexdigest() ,16)
+
+    # send broadcast message to get in
+    def get_in(self) -> None:
+        socket = self.context.socket(zmq.PUB)
+        address = "tcp://"+ HOST +":"+ PORT
+        socket.bind(address)  
+        socket.send_string('I-get-in-bitches')
+        return
+        
+    def update_finger_table(self) -> None:
+        # update my objects
+        socket = self.context.socket(zmq.PUSH) 
+        address = "tcp://"+ HOST +":"+ PORT 
+        socket.bind(address) 
+        socket.send("give-me-my-info")
+        # update other objects
+        socket2 = self.context.socket(zmq.PUSH) 
+        address = "tcp://"+ HOST +":"+ PORT 
+        socket2.bind(address) 
+        socket2.send_json("{new-finger-table:"+self.finger_table+"}") 
     
-    def on_connect(self, conn):
-        print(f"Connection from {conn}")
-        return super().on_connect(conn)
     
-    def on_disconnect(self, conn):
-        print(f"Connection closed from {conn}")
-        return super().on_disconnect(conn)
-
-    def exposed_addit(self, name: str, ip: str):
-        with open('hash_table.json', 'r+') as htf:
-            hash_table = json.load(htf)
-            hash_table[name] = ip
-            htf.seek(0)
-            json.dump(hash_table, htf, indent=4) 
-            htf.truncate()
-        return "Added " + name + " with ip: " + ip
-
-    def exposed_whereis(self, name: str):
-        with open('hash_table.json', 'r') as htf:
-            hash_table = json.load(htf)
-            ip = hash_table[name]
-        return ip    
-    
-    """ 
-    def exposed_getdocument(self, host: str, port1: str, port2: str):
-        HOST = host
-        PORT1 = port1
-        PORT2 = port2
-
-        context = zmq.Context()
-        p1 = "tcp://"+ HOST +":"+ PORT1 # how and where to connect
-        p2 = "tcp://"+ HOST +":"+ PORT2 # how and where to connect
-        s = context.socket(zmq.REP) # create reply socket
-        s.bind(p1) # bind socket to address
-        s.bind(p2) # bind socket to address
-        while True:
-            message = s.recv_string() # wait for incoming message
-            if not "STOP" in message: # if not to stop...
-                s.send_string(message + "*") # append "*" to message
-            else: # else...
-                break # break out of loop and end
-    """ 
-    
-    def exposed_doc(self):
-        return """
-            addit (self, name: string, ip string)
-            whereis (self, name: string)
-        """  
-            #getdocument (self, host: str, port1: str, port2: str)
-
-
-if __name__ == "__main__":
-    from rpyc.utils.server import ThreadedServer
-    server = ThreadedServer(Chord, hostname="0.0.0.0", port=8001)
-    print("RPC server on 0.0.0.0:8001")
-    server.start()
