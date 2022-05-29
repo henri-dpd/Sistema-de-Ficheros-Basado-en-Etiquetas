@@ -17,15 +17,14 @@ class Node():
         self.antecessor_id = None
         self.antecessor_ip = None
         self.context = zmq.Context(io_threads= 1)
+        self.socket_pub = self.context.socket(zmq.PUB)
+        self.socket_sub = self.context.socket(zmq.SUB)
+        self.socket_push = self.context.socket(zmq.PUSH)
+        self.socket_pull = self.context.socket(zmq.PULL)
         self.get_in()
         self.finger_table = [] # [("id1", "ip1"), ("id2", "ip2")]
         self.my_objects = {} # {"id1": "tal lugar", "id2": "mas cual lugar"}
         self.update_finger_table()
-        """ 
-        self.socket_to_successor = self.context.socket(zmq.PUSH)
-        self.socket_from_antecessor = self.context.socket(zmq.PULL)
-        self.socket_from_antecessor.bind('tcp://' + self.antecessor_ip + ':5555')
-        """
 
     # get ip of the pc
     def get_ip_broadcast(self) -> str:
@@ -47,7 +46,7 @@ class Node():
 
     # send broadcast message to get in
     def get_in(self) -> None:
-        socket = self.context.socket(zmq.PUB)
+        socket = self.socket_pub
         address = "tcp://"+ self.broadcast +":"+ PORT
         socket.bind(address)  
         socket.send_string('I-get-in-bitches')
@@ -55,14 +54,13 @@ class Node():
         
     def update_finger_table(self) -> None:
         # update my objects
-        socket = self.context.socket(zmq.PUSH) 
+        socket = self.socket_push 
         address = "tcp://"+ self.successor_ip +":"+ PORT 
         socket.bind(address) 
         socket.send("give-me-my-info")
         # update other objects
-        socket2 = self.context.socket(zmq.PUSH) 
         address = "tcp://"+ self.antecessor_ip +":"+ PORT 
-        socket2.bind(address) 
-        socket2.send_json("{new-finger-table:"+self.finger_table+"}") 
+        socket.bind(address) 
+        socket.send_json("{new-finger-table:"+self.finger_table+"}") 
     
     
