@@ -19,14 +19,15 @@ class Node():
         self.context = zmq.Context(io_threads= 1)
         self.socket_pub = self.context.socket(zmq.PUB)
         self.socket_sub = self.context.socket(zmq.SUB)
-        address = "tcp://"+ self.broadcast +":"+ PORT
-        #-----------------------------------------------------------------#
+        #------------------------------------------------------------------#
         ##----COMO PUEDO TOMAR LOS DATOS CUANDO ME HACEN UN BROADCAST?----##
+        ##----EL ADDRESS ES DEL IP DE BROADCAST O DEL IP DEL NODO?--------##
+        address = "tcp://"+ self.broadcast +":"+ PORT
         self.socket_sub.bind(address) 
-        address = "tcp://"+ self.ip +":"+ PORT
         ##----COMO PUEDO TOMAR LOS DATOS piden unirse o la tabla chor?----##
+        address = "tcp://"+ self.ip +":"+ PORT
         self.socket_pull.bind(address) 
-        #-----------------------------------------------------------------# 
+        #------------------------------------------------------------------# 
         self.socket_push = self.context.socket(zmq.PUSH)
         self.socket_pull = self.context.socket(zmq.PULL)
         self.get_in()
@@ -60,7 +61,7 @@ class Node():
         socket.send_string('I-get-in-bitches')
         # get message from successor
         #-----------------------------------------------------------------#
-        ##----ESTA BIEN TOMAR LOS DATOS DE ESA FORMA?----##
+        ##----------ESTA BIEN TOMAR LOS DATOS DE ESA FORMA?--------------##
         socket = self.socket_pull
         address = "tcp://"+ self.ip +":"+ PORT
         socket.bind(address)  
@@ -80,7 +81,7 @@ class Node():
         socket.send("give-me-my-info")
         # get message from successor
         #-----------------------------------------------------------------#
-        ##----ESTA BIEN TOMAR LOS DATOS DE ESA FORMA?----##
+        ##----------ESTA BIEN TOMAR LOS DATOS DE ESA FORMA?--------------##
         socket = self.socket_pull
         address = "tcp://"+ self.ip +":"+ PORT
         socket.bind(address)  
@@ -88,6 +89,7 @@ class Node():
         self.chor = recv_json
         #-----------------------------------------------------------------#
         # update other objects
+        socket = self.socket_push 
         address = "tcp://"+ self.antecessor_ip +":"+ PORT 
         socket.bind(address) 
         socket.send_json("{new-finger-table:"+self.finger_table+"}") 
