@@ -4,12 +4,13 @@ import zmq
 import netifaces as ni
 import pickle
 
-HOST = '0.0.0.0'
 PORT = '8002'
 
 class Node():
     def __init__(self):
-        self.ip = self.get_ip()
+        self.ip, self.broadcast = self.get_ip_broadcast()
+        HOST = self.ip
+        BROADCAST = self.broadcast
         self.id = self.get_id(self.ip)
         self.successor_id = None
         self.successor_ip = None
@@ -27,16 +28,16 @@ class Node():
         """
 
     # get ip of the pc
-    def get_ip(self) -> str:
+    def get_ip_broadcast(self) -> str:
         interfaces = ni.interfaces()
         if 'vmnet1' in interfaces: 
-            return ni.ifaddresses('vmnet1')[ni.AF_LINK][0]['addr']
+            return ni.ifaddresses('vmnet1')[ni.AF_INET][0]['addr'], ni.ifaddresses('vmnet1')[ni.AF_INET][0]['broadcast']
         elif 'vmnet8' in interfaces: 
-            return ni.ifaddresses('vmnet8')[ni.AF_LINK][0]['addr']
-        elif 'enp3s0f1' in interfaces: 
-            return ni.ifaddresses('enp3s0f1')[ni.AF_LINK][0]['addr']
+            return ni.ifaddresses('vmnet8')[ni.AF_INET][0]['addr'], ni.ifaddresses('vmnet8')[ni.AF_INET][0]['broadcast']
+        elif 'wlp2s0' in interfaces: 
+            return ni.ifaddresses('wlp2s0')[ni.AF_INET][0]['addr'], ni.ifaddresses('wlp2s0')[ni.AF_INET][0]['broadcast']
         else:
-            return ni.ifaddresses(interfaces[0])[ni.AF_LINK][0]['addr']
+            return ni.ifaddresses(interfaces[0])[ni.AF_INET][0]['addr'], ni.ifaddresses(interfaces[0])[ni.AF_INET][0]['broadcast']
 
     # calculate id using sha hash
     def get_id(self, ip:int)-> str:
@@ -47,7 +48,7 @@ class Node():
     # send broadcast message to get in
     def get_in(self) -> None:
         socket = self.context.socket(zmq.PUB)
-        address = "tcp://"+ HOST +":"+ PORT
+        address = "tcp://"+ self.broadcast +":"+ PORT
         socket.bind(address)  
         socket.send_string('I-get-in-bitches')
         return
@@ -55,12 +56,12 @@ class Node():
     def update_finger_table(self) -> None:
         # update my objects
         socket = self.context.socket(zmq.PUSH) 
-        address = "tcp://"+ HOST +":"+ PORT 
+        address = "tcp://"+ self.successor_ip +":"+ PORT 
         socket.bind(address) 
         socket.send("give-me-my-info")
         # update other objects
         socket2 = self.context.socket(zmq.PUSH) 
-        address = "tcp://"+ HOST +":"+ PORT 
+        address = "tcp://"+ self.antecessor_ip +":"+ PORT 
         socket2.bind(address) 
         socket2.send_json("{new-finger-table:"+self.finger_table+"}") 
     
