@@ -87,20 +87,22 @@ class Node():
         return
 
     #subscriter to broadcast
-    def broadcast_thread_funct(self,lock,socket_pub)->None:
+    def broadcast_thread_funct(self,lock,socket)-> None:
         while True:
-            recv_json =  json.loads(socket_pub.recv_json())
+            recv_json =  json.loads(socket.recv_json())
             if recv_json: #if there is something in recv_json
                 if("I-get-in" in recv_json):
                     lock.acquire()
                     ret_json = {"send-me-confirmation":self.ip}
-                    self.socket_push.bind(recv_json["I-get-in"])
+                    address = "tcp://"+ recv_json["I-get-in"] +":"+ PORT
+                    self.socket_push.bind(address)
                     self.socket_push.send_json(ret_json)
                     lock.release()
+                    
         
-    def pull_thread_funct(self,lock,socket_pull)->None:
+    def pull_thread_funct(self,lock,socket)-> None:
         while True:
-            recv_json =  json.loads(socket_pull.recv_json())
+            recv_json =  json.loads(socket.recv_json())
             if recv_json: #if there is something in recv_json
                 if("my-confirmation" in recv_json):
                     lock.acquire()
@@ -109,9 +111,49 @@ class Node():
                     ret_json["you-are-in"]["successor_ip"] = self.ip
                     ret_json["you-are-in"]["antecessor_id"] = self.antecessor_id
                     ret_json["you-are-in"]["antecessor_ip"] = self.antecessor_ip
-                    self.socket_push.bind(recv_json["my-confirmation"])
+                    address = "tcp://"+ recv_json["my-confirmation"] +":"+ PORT
+                    self.socket_push.bind(address)
                     self.socket_push.send_json(ret_json)
                     lock.release()
+                if("give-me-my-info" in recv_json):
+                    lock.acquire()
+                    chord_successor = {}
+                    for object_id in self.chord:
+                        if object_id >= (2**recv_json["give-me-my-info"]["id"]) and object_id < (2** self.id):
+                            chord_successor[object_id] = self.chord[object_id]
+                            del(self.chord[object_id])
+                    finger_table = self.finger_table
+                    ret_json = {"here-you-are": {"chord":chord_successor, "finger-table":finger_table}}
+                    address = "tcp://"+ recv_json["give-me-my-info"]["ip"] +":"+ PORT
+                    self.socket_push.bind(address)
+                    self.socket_push.send_json(ret_json)
+                    
+                    #Update my finger table
+                    new_element ={"id":recv_json["give-me-my-info"]["id"],"ip":recv_json["give-me-my-info"]["ip"]}
+                    self.finger_table.pop()
+                    self.finger_table.insert(0,new_element)
+                    
+                    #Update finger table of other nodes
+                    ret_json = {"update-finger-table": {"new-element": new_element, "count": 6}}
+                    address = "tcp://"+ self.successor_id +":"+ PORT
+                    self.socket_push.bind(address)
+                    self.socket_push.send_json(ret_json)
+                    self.successor_id = recv_json["give-me-my-info"]["id"]
+                    self.successor_ip = recv_json["give-me-my-info"]["ip"]
+                    lock.release()
+                if "update-finger-table" in recv_json:
+                    lock.acquire()
+                    new_element = recv_json["update-finger-table"]["new-element"]
+                    self.finger_table.pop()
+                    self.finger_table.insert(0,new_element)
+                    count = recv_json["update-finger-table"]["new-element"]
+                    if count > 1:
+                        ret_json = {"update-finger-table": {"new-element": new_element, "count": count-1}}
+                        address = "tcp://"+ self.successor_id +":"+ PORT
+                        self.socket_push.bind(address)
+                        self.socket_push.send_json(ret_json)
+                    lock.remove()
+                    
     # wait request
     def request (self,lock,socket)-> json:
         start_time = time.time()
@@ -122,10 +164,11 @@ class Node():
                 break
             recv_json =  json.loads(socket.recv_json())
             if recv_json: #if there is something in recv_json
-                if("send-me-confirmation" and not recived):
+                if("send-me-confirmation" in recv_json and not recived):
                     lock.acquire()
                     ret_json = {"my-confirmation":self.ip}
-                    self.socket_push.bind(recv_json["send-me-confirmation"])
+                    address = "tcp://"+ recv_json["send-me-confirmation"] +":"+ PORT
+                    self.socket_push.bind(address)
                     self.socket_push.send_json(ret_json)
                     lock.release()
                     recived = True
@@ -142,21 +185,38 @@ class Node():
     def update_finger_table(self) -> None:
         # update my objects
         socket = self.socket_push 
-        address = "tcp://"+ self.successor_ip +":"+ PORT 
+        address = "tcp://"+ self.antecessor_ip +":"+ PORT 
         socket.bind(address) 
-        socket.send("give-me-my-info")
-        # get message from successor
+        ret_json = {"give-me-my-info": { "ip":self.ip,"id":self.id}}
+        socket.send_json(ret_json)
+        
+        # get message from antecessor
         #-----------------------------------------------------------------#
         ##----------ESTA BIEN TOMAR LOS DATOS DE ESA FORMA?--------------##
         socket = self.socket_pull
-        address = "tcp://"+ self.ip +":"+ PORT
-        socket.bind(address)  
-        recv_json =  json.loads(socket.recv_json())
-        self.chord = recv_json
+        address = "tcp://"+ self.antecessor_ip +":"+ PORT
+        self.socket_pull.bind(address) 
+        objects_lock = threading.Lock()
+        #Open Thread
+        get_objects_thread = threading.Thread(target = get_objects_thread_funct, args = (self,objects_lock,self.socket_pull))
+        get_objects_thread.start()
+        get_objects_thread.join()
         #-----------------------------------------------------------------#
-        # update other objects
-        socket = self.socket_push 
-        address = "tcp://"+ self.antecessor_ip +":"+ PORT 
-        socket.bind(address) 
-        socket.send_json("{new-finger-table:"+self.finger_table+"}") 
         
+        
+        def get_objects_thread_funct(self, lock, socket):
+            start_time = time.time()
+            recived = False
+            while True:
+                actual_time = time.time() 
+                if(actual_time-start_time > 30):
+                    break
+                recv_json =  json.loads(socket.recv_json())
+                if ("here-you-are" in recv_json and not recived):
+                    lock.acquire()
+                    self.chord = recv_json["here-you-are"]["chord"]
+                    self.finger_table = recv_json["here-you-are"]["finger-table"]
+                    lock.release()
+                    recived = True
+                    break
+            return 
