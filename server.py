@@ -219,3 +219,89 @@ class Node():
                     recived = True
                     break
             return 
+
+    def calculate_id_in(self, ip_request, initial_id, best_id, best_ip_to_in, best_score):
+
+        #La idea es calcular el mayor espaciamiento entre dos nodos en el chord
+        # best_score inicia en 1 patra que no se elijan nodos consecutivos
+
+        if initial_id == None:  # Si es none es porque este es el primer request
+            initial_id = self.id
+        
+        if len(self.finger_table) == 0: # Si solo hay un nodo en el chord
+            if self.id < n - self.id:
+                best_id = n + self.id
+            else:
+                best_id = self.id
+
+            if best_id % 2 == 0:
+                best_id = best_id / 2
+            else:
+                best_id = (best_id / 2) + 1
+            # Enviar mensaje al ip_request de que fue entrado al chord
+            # Entrar al nodo
+
+        # Primero calculamos el espaciamiento entre esta pc y la siguiente
+        
+        if self.id < self.successor_id:
+            if self.successor_id - self.id > best_score:
+                best_score = self.successor_id - self.id
+                best_id = self.id + self.successor_id
+                if best_id % 2 == 0:
+                    best_id = best_id / 2
+                else:
+                    best_id = (best_id / 2) + 1
+                best_ip_to_in = self.ip
+        else:
+            if n - self.id + self.successor_id > best_score:
+                best_score = n - self.id + self.successor_id
+
+                best_id = self.id + n + self.successor_id
+                
+                if best_id % 2 == 0:
+                    best_id = best_id / 2
+                else:
+                    best_id = (best_id / 2) + 1
+
+                if best_id > n:
+                    best_id = best_id - n
+                best_ip_to_in = self.ip
+
+        # Luego revisamos todos los espaciamientos en la finger table
+
+        for i in range(len(self.finger_table) - 1):
+
+            first_id = self.finger_table[i][0]
+            second_id = self.finger_table[i + 1][0]
+
+            if self.finger_table[i][0] == initial_id:
+                # Ya con esto recorrimos todo el chord y encontramos el mejor espaciamiento
+                # Ahora le enviamos ese mensaje al nodo designado para que reciba al nuevo nodo
+                return
+
+
+            if  first_id < second_id:
+                if first_id - second_id > best_score:
+                    best_score = first_id - second_id
+                    best_id = first_id + second_id
+                    if best_id % 2 == 0:
+                        best_id = best_id / 2
+                    else:
+                        best_id = (best_id / 2) + 1
+                    best_ip_to_in = self.ip
+            else:
+                if n - first_id + second_id > best_score:
+                    best_score = n - first_id + second_id
+
+                    best_id = first_id + n + second_id
+                    
+                    if best_id % 2 == 0:
+                        best_id = best_id / 2
+                    else:
+                        best_id = (best_id / 2) + 1
+
+                    if best_id > n:
+                        best_id = best_id - n
+                    best_ip_to_in = self.ip
+
+        # Enviar todos los datos actuales al nodo en la última posición de la finger table
