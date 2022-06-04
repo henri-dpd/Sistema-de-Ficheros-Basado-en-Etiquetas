@@ -4,7 +4,6 @@ import time
 from requests import request
 import zmq
 import netifaces as ni
-import pickle
 import json
 import threading
 

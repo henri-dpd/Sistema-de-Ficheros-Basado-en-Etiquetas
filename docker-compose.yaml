@@ -1,0 +1,11 @@
+version: "3.7"
+
+services:
+
+  app:
+    image: get-started-deployment-and-test:v1
+    ports:
+      - 8002:8002
+    volumes:
+      - ./data:./data
+
