@@ -50,6 +50,10 @@ class Node():
         self.my_objects = {} # {"id1": "tal lugar", "id2": "mas cual lugar"}
         self.update_finger_table()
 
+        # Inicialización de todo aquello relacionado con etiquetas:
+        self.label_finger_table = {} # { "Fotos de perros" : [id_1, id_2, id_3...], "Recetas de Comida" : [id_4, id_5...]}
+        self.labels = {} # {"Fotos de Perros" : counter_1, "Recetas de Comida": counter_2, ....}
+
     # get ip of the pc
     def get_ip_broadcast(self) -> str:
         return '127.10.0.1', '127.10.255.255'
@@ -241,11 +245,48 @@ class Node():
                 break
         return 
         
+    # Método para buscar en qué pc se encuentra una etiqueta y pedirle que la devuelva
+    def search_by_label(self, label, ip_request, initial_request):
 
+        self.return_by_label(label, ip_request)
+
+        # Aquí guardaremos las pc que conocemos que tienen dicha etiqueta
+        labels_id = []
+
+        if label in self.label_finger_table:
+            labels_id = self.label_finger_table[label]
+        
+        for (id, ip) in self.finger_table: # Viajamos por toda la finger table
+
+            if ip == initial_request: #Si ya le dimos toda la vuelta al chrod nos detenemos
+                return
+            
+            if (id, ip) == labels_id[len(labels_id) - 1]:
+                request_json = {"label" : label, "ip_request":ip_request, initial_request:"initial_request"}
+                address = "tcp://"+ ip +":"+ PORT3
+                self.socket_push.bind(address)
+                self.socket_push.send_json(request_json)
+                return
+
+            if id in labels_id:
+                request_json = {"label" : label, "ip_request":ip_request, initial_request:None}
+                address = "tcp://"+ ip +":"+ PORT3
+                self.socket_push.bind(address)
+                self.socket_push.send_json(request_json)
+                
+
+    def return_by_label(self, label, ip_request):
+        if label in self.labels:
+            ################
+            # Enviar todos los archivos correspondientes al ip_request
+            pass
+
+
+    # Método para calcular el id que debe tener en el chord una pc que desea entrar
     def calculate_id_in(self, ip_request, initial_id, best_id, best_ip_to_in, best_score):
 
         #La idea es calcular el mayor espaciamiento entre dos nodos en el chord
-        # best_score inicia en 1 patra que no se elijan nodos consecutivos
+        # best_score inicia en 1 para que no se elijan nodos consecutivos
 
         if initial_id == None:  # Si es none es porque este es el primer request
             initial_id = self.id
@@ -260,8 +301,9 @@ class Node():
                 best_id = best_id / 2
             else:
                 best_id = (best_id / 2) + 1
-            # Enviar mensaje al ip_request de que fue entrado al chord
             # Entrar al nodo
+            # Enviar mensaje al ip_request de que fue entrado al chord
+            
 
         # Primero calculamos el espaciamiento entre esta pc y la siguiente
         
