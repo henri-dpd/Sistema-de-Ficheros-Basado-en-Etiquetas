@@ -7,10 +7,10 @@ import netifaces as ni
 import json
 import threading
 
-PORT1 = '8001'
-PORT2 = '8002'
-PORT3 = '8003'
-PORT4 = '8004'
+PORT1 = '8002'
+PORT2 = '8003'
+PORT3 = '8004'
+PORT4 = '8005'
 
 class Node():
     def __init__(self, number_nodes = 64):
@@ -27,9 +27,6 @@ class Node():
         self.socket_sub = self.context.socket(zmq.SUB)
         self.socket_push = self.context.socket(zmq.PUSH)
         self.socket_pull = self.context.socket(zmq.PULL)
-        #------------------------------------------------------------------#
-        ##----COMO PUEDO TOMAR LOS DATOS CUANDO ME HACEN UN BROADCAST?----##
-        ##----EL ADDRESS ES DEL IP DE BROADCAST O DEL IP DEL NODO?--------##
         address = "tcp://"+ self.broadcast +":"+ PORT2
         self.socket_sub.bind(address) 
         broadcast_lock = threading.Lock()
@@ -37,7 +34,6 @@ class Node():
         broadcast_thread = threading.Thread(target = self.broadcast_thread_funct, args = (self,broadcast_lock,self.socket_sub))
         broadcast_thread.start()
         broadcast_thread.join()
-        ##----COMO PUEDO TOMAR LOS DATOS piden unirse o la tabla chord?----##
         address = "tcp://"+ self.ip +":"+ PORT4
         self.socket_pull.bind(address) 
         pull_lock = threading.Lock()
@@ -84,8 +80,6 @@ class Node():
         socket.bind(address)  
         socket.send_string('{"I-get-in": "'+ self.ip +'"}')
         # get message from successor
-        #-----------------------------------------------------------------#
-        ##----------ESTA BIEN TOMAR LOS DATOS DE ESA FORMA?--------------##
         socket = self.socket_pull
         address = "tcp://"+ self.ip +":"+ PORT4
         # socket.bind(address)
@@ -216,8 +210,6 @@ class Node():
         socket.send_json(ret_json)
         
         # get message from antecessor
-        #-----------------------------------------------------------------#
-        ##----------ESTA BIEN TOMAR LOS DATOS DE ESA FORMA?--------------##
         socket = self.socket_pull
         address = "tcp://"+ self.antecessor_ip +":"+ PORT4
         self.socket_pull.bind(address) 
@@ -226,7 +218,6 @@ class Node():
         get_objects_thread = threading.Thread(target = self.get_objects_thread_funct, args = (self,objects_lock,self.socket_pull))
         get_objects_thread.start()
         get_objects_thread.join()
-        #-----------------------------------------------------------------#
         
     def get_objects_thread_funct(self, lock, socket):
         start_time = time.time()
