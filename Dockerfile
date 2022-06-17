@@ -1,10 +1,15 @@
-FROM python:3.10.4-alpine3.16
+FROM python:3.7-slim
 
 WORKDIR /usr/src/app
 
-COPY requirements.txt ./
-RUN pip install --no-cache-dir -r requirements.txt
-
+#Adding files.
 COPY . .
 
-CMD [ "python", "./server.py" ]
+#RUN Step
+RUN pip install pyzmq
+
+
+EXPOSE 8080
+
+#Default running
+ENTRYPOINT ["python", "diaz_chord.py"] 
