@@ -12,4 +12,4 @@ RUN pip install pyzmq
 EXPOSE 8080
 
 #Default running
-ENTRYPOINT ["python", "diaz_chord.py"] 
+ENTRYPOINT ["python", "server.py"] 
