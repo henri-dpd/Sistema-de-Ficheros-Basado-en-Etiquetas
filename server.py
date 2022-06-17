@@ -13,42 +13,26 @@ PORT3 = '8004'
 PORT4 = '8005'
 
 class Node():
-    def __init__(self, number_nodes = 64):
-        self.number_nodes = number_nodes
-        self.ip, self.broadcast = self.get_ip_broadcast()
-        self.id = self.get_id(self.ip)
-        self.chord = [] # {hash: obj_addr}
-        self.successor_id = None
-        self.successor_ip = None
-        self.antecessor_id = None
-        self.antecessor_ip = None
-        self.context = zmq.Context(io_threads= 1)
-        self.socket_pub = self.context.socket(zmq.PUB)
-        self.socket_sub = self.context.socket(zmq.SUB)
-        self.socket_push = self.context.socket(zmq.PUSH)
-        self.socket_pull = self.context.socket(zmq.PULL)
-        address = "tcp://"+ self.broadcast +":"+ PORT2
-        self.socket_sub.bind(address) 
-        broadcast_lock = threading.Lock()
-        #Open Thread
-        broadcast_thread = threading.Thread(target = self.broadcast_thread_funct, args = (self,broadcast_lock,self.socket_sub))
-        broadcast_thread.start()
-        broadcast_thread.join()
-        address = "tcp://"+ self.ip +":"+ PORT4
-        self.socket_pull.bind(address) 
-        pull_lock = threading.Lock()
-        #open thread
-        pull_thread = threading.Thread( target = self.pull_thread_funct, args = (self, pull_lock, self.socket_pull))
-        pull_thread.start()
-        pull_thread.join()
-        self.get_in()
-        self.finger_table = [] # [("id1", "ip1"), ("id2", "ip2")]
-        self.my_objects = {} # {"id1": "tal lugar", "id2": "mas cual lugar"}
-        self.update_finger_table()
+    def __init__(self, address, introduction_node = None, debug_print = False):
+        self.address = address
+        self.id = lambda input_to_id : 0
+        self.debug_print = debug_print      
+        self.context = zmq.Context()
+        self.size = 64
+        self.length_verify = 3        
+        self.verify = [(self.id, self.address) for i in range(self.length_verify)]
+        self.start = lambda i : (self.id + 2**(i)) % 2**self.size
+        self.finger_table = [None for i in range(self.size)]
+        self.waiting_time = 10
+    
+        #crear comandos???????????????????????????????????????????????????????????????????
+        self.commands = {}
 
-        # Inicialización de todo aquello relacionado con etiquetas:
-        self.label_finger_table = {} # { "Fotos de perros" : [id_1, id_2, id_3...], "Recetas de Comida" : [id_4, id_5...]}
-        self.labels = {} # {"Fotos de Perros" : counter_1, "Recetas de Comida": counter_2, ....}
+        if self.debug_print: print("Started node ", (self.id, self.addr))
+
+        #Falta introducir nodo a la red??????????????????????????????????????????????????
+
+
 
     # get ip of the pc
     def get_ip_broadcast(self) -> str:
