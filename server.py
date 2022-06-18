@@ -28,7 +28,10 @@ class Node():
         self.commands = {"join": self.command_join, 
                          "find_successor": self.command_find_successor,
                          "find_predecessor": self.command_find_predecessor,
-                         "find_best_id" : self.calculate_id_in}
+                         "calculate_id_in" : self.calculate_id_in,
+                         "get_in_new_node" : self.get_in_new_node,
+                         "replace_anteccessor" : self.replace_anteccessor,
+                         "replace_finger_table_consecutive" : self.replace_finger_table_consecutive}
         self.commands_request = {}
 
         print("Started node ", (self.id, self.addr))
@@ -280,7 +283,7 @@ class Node():
 
 
     # Método para calcular el id que debe tener en el chord una pc que desea entrar
-    def calculate_id_in(self, ip_request, initial_id, best_id, best_ip_to_in, best_score):
+    def calculate_id_in(self, address_request, initial_id, best_id, best_address_to_in, best_score, sock_req : request):
 
         #La idea es calcular el mayor espaciamiento entre dos nodos en el chord
         # best_score inicia en 1 para que no se elijan nodos consecutivos
@@ -289,8 +292,8 @@ class Node():
             initial_id = self.id
         
         if len(self.finger_table) == 0: # Si solo hay un nodo en el chord
-            if self.id < self.number_nodes - self.id:
-                best_id = self.number_nodes + self.id
+            if self.id < self.size - self.id:
+                best_id = self.size + self.id
             else:
                 best_id = self.id
 
@@ -298,8 +301,7 @@ class Node():
                 best_id = best_id / 2
             else:
                 best_id = (best_id / 2) + 1
-            # Entrar al nodo
-            # Enviar mensaje al ip_request de que fue entrado al chord
+            self.get_in_new_node(address_request, best_id, sock_req)
             
 
         # Primero calculamos el espaciamiento entre esta pc y la siguiente
@@ -312,21 +314,21 @@ class Node():
                     best_id = best_id / 2
                 else:
                     best_id = (best_id / 2) + 1
-                best_ip_to_in = self.ip
+                best_address_to_in = self.address
         else:
-            if self.number_nodes - self.id + self.successor_id > best_score:
-                best_score = self.number_nodes - self.id + self.successor_id
+            if self.size - self.id + self.successor_id > best_score:
+                best_score = self.size - self.id + self.successor_id
 
-                best_id = self.id + self.number_nodes + self.successor_id
+                best_id = self.id + self.size + self.successor_id
                 
                 if best_id % 2 == 0:
                     best_id = best_id / 2
                 else:
                     best_id = (best_id / 2) + 1
 
-                if best_id > self.number_nodes:
-                    best_id = best_id - self.number_nodes
-                best_ip_to_in = self.ip
+                if best_id > self.size:
+                    best_id = best_id - self.size
+                best_address_to_in = self.address
 
         # Luego revisamos todos los espaciamientos en la finger table
 
@@ -338,7 +340,13 @@ class Node():
             if self.finger_table[i][0] == initial_id:
                 # Ya con esto recorrimos todo el chord y encontramos el mejor espaciamiento
                 # Ahora le enviamos ese mensaje al nodo designado para que reciba al nuevo nodo
-                return
+                recv_json = sock_req.make_request(json_to_send = {"command_name" : "get_in_new_node", 
+                                                                  "method_params" : {"address_to_get_in": address_request,
+                                                                                     "id_to_place": best_id}},
+                                          requester_object = self,
+                                          destination_addr = best_address_to_in)
+                return 0
+
 
 
             if  first_id < second_id:
@@ -349,12 +357,12 @@ class Node():
                         best_id = best_id / 2
                     else:
                         best_id = (best_id / 2) + 1
-                    best_ip_to_in = self.ip
+                    best_address_to_in = self.finger_table[i][1]
             else:
-                if self.number_nodes - first_id + second_id > best_score:
-                    best_score = self.number_nodes - first_id + second_id
+                if self.size - first_id + second_id > best_score:
+                    best_score = self.size - first_id + second_id
 
-                    best_id = first_id + self.number_nodes + second_id
+                    best_id = first_id + self.size + second_id
                     
                     if best_id % 2 == 0:
                         best_id = best_id / 2
@@ -363,23 +371,73 @@ class Node():
 
                     if best_id > self.number_nodes:
                         best_id = best_id - self.number_nodes
-                    best_ip_to_in = self.ip
+                    best_address_to_in = self.finger_table[i][1]
 
         # Enviar todos los datos actuales al nodo en la última posición de la finger table
+        recv_json = sock_req.make_request(json_to_send = {"command_name" : "calculate_id_in", 
+                                                                  "method_params" : {"address_request": address_request,
+                                                                                     "initial_id" : initial_id, 
+                                                                                     "best_id" : best_id, 
+                                                                                     "best_address_to_in" : best_address_to_in,
+                                                                                     "best_score" : best_score}},
+                                          requester_object = self,
+                                          destination_addr = best_address_to_in)
+
 
     # Método para que un nodo entre a otro como su sucesor en el chord
-    def get_in_new_node(self, ip_to_get_in, id_to_place, sock_req : request):
+    def get_in_new_node(self, address_to_get_in, id_to_place, sock_req : request):
         # Primero le damos nuestra finger table para que actualice la suya
-        recv_json = sock_req.make_request(json_to_send = {"command_name" : "Put_new_node_as_successor", 
+        recv_json = sock_req.make_request(json_to_send = {"command_name" : "get_in_to_chord_succefully", 
                                                           "method_params" : {"id" : id_to_place,
                                                                              "finger_table" : self.finger_table,
                                                                              "anteccessor_address" : self.address,
                                                                              "anteccessor_id" : self.id}},
                                           requester_object = self,
-                                          destination_addr = ip_to_get_in)
+                                          destination_addr = address_to_get_in)
 
         if not recv_json is sock_req.error_json:
+            #Luego actualizamos el antecesor del  sucesor del nuevo nodo
+            recv_json = sock_req.make_request(json_to_send = {"command_name" : "replace_anteccessor", 
+                                                              "method_params" : {"new_predecessor_address" : None,
+                                                                                 "new_predecessor_id": None}},
+                                             requester_object = self,
+                                             destination_addr = self.finger_table[0][1])
 
-            if len(self.finger_table) == self.finger_table_length:
-                self.finger_table = self.finger_table[:len(self.finger_table) - 1]
-            self.finger_table.insert(0, [id_to_place, ip_to_get_in])
+            if not recv_json is sock_req.error_json:
+                # Luego modificamos la finger table del nodo actual
+                if len(self.finger_table) == self.finger_table_length:
+                    self.finger_table = self.finger_table[:len(self.finger_table) - 1]
+                self.finger_table.insert(0, [id_to_place, address_to_get_in])
+
+                finger_table_to_send = self.finger_table.copy()
+                if len(finger_table_to_send) < self.finger_table_length:
+                    finger_table_to_send = finger_table_to_send[:len(finger_table_to_send) - 1]
+                finger_table_to_send.insert(0, [self.id, self.address])
+
+                # Y comenzamos a avisarle al resto de nodos anteriores de que actualicen su finger table
+                recv_json = sock_req.make_request(json_to_send = {"command_name" : "replace_finger_table_consecutive", 
+                                                                  "method_params" : {"finger_table": finger_table_to_send,
+                                                                                     "iterations": len(self.finger_table)}},
+                                             requester_object = self,
+                                             destination_addr = self.antecessor_address)
+
+
+
+    def replace_anteccessor(self, new_predecessor_address, new_predecessor_id, sock_req : request):
+        self.antecessor_id = new_predecessor_id
+        self.antecessor_address = new_predecessor_address
+
+    def replace_finger_table_consecutive(self, finger_table, iterations, sock_req: request):
+        self.finger_table = finger_table
+        if iterations > 0:
+            finger_table_to_send = self.finger_table.copy()
+            if len(finger_table_to_send) < self.finger_table_length:
+                finger_table_to_send = finger_table_to_send[:len(finger_table_to_send) - 1]
+            finger_table_to_send.insert(0, [self.id, self.address])
+
+            # Y comenzamos a avisarle al resto de nodos anteriores de que actualicen su finger table
+            recv_json = sock_req.make_request(json_to_send = {"command_name" : "replace_finger_table_consecutive", 
+                                                                "method_params" : {"finger_table": finger_table_to_send,
+                                                                                    "iterations": iterations - 1}},
+                                            requester_object = self,
+                                            destination_addr = self.antecessor_address)
