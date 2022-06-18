@@ -1,9 +1,11 @@
 import hashlib
+from random import Random
 import math
 import time
 import zmq
 import json
 import threading
+from request import request
 
 PORT1 = '8082'
 PORT2 = '8083'
@@ -121,6 +123,17 @@ class Node():
         
         #-----------------------------------------------------------------#
         return
+
+    def thread_verify (self):
+        countdown = time()
+        rand = Random()
+        rand.seed()
+        requester = request(context = self.context)
+        while True:
+            if abs (countdown - time( ) ) > self.waiting_time:
+                if self.predecessor_id != self.id:
+                    self.verify_active_nodes(sock_req = requester)                     
+                countdown = time()
 
     #subscriter to broadcast
     def broadcast_thread_funct(self,lock,socket)-> None:
