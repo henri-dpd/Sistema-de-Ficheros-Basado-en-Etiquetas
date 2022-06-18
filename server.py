@@ -45,9 +45,11 @@ class Node():
                          }
         self.commands_request = {}
 
-        print("Started node ", (self.id, self.addr))
+        print("Started node ", (self.id, self.address))
 
         #Falta introducir nodo a la red??????????????????????????????????????????????????
+
+        self.execute()
 
 
     def waiting_for_commands(self, client_request):
@@ -96,10 +98,15 @@ class Node():
     def command_get_predecessor(self):
         self.sock_rep.send_json({"response": "ACK", "return_info": {"predecessor_id" : self.predecessor_id, "predecessor_address" : self.predecessor_address } } )
 
-    def command_get_succesor(self, x):
+    def command_get_successor(self, x):
         id, address = self.finger_table[x-1][0],self.finger_table[x-1][1]
         self.sock_rep.send_json({"response": "ACK", "return_info": {"successor_pos_x_id": id, "successor_pos_x_address": address}})
 
+    def execute(self, client_requester):
+        
+        thread_verify = threading.Thread(target = self.verify, args =() )
+        thread_verify.start()        
+        self.waiting_for_commands(client_requester)
 
     # calculate id using sha hash
     def get_id(self, ip:int)-> str:
