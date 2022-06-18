@@ -1,10 +1,12 @@
 import hashlib
+from random import Random
 import math
 import time
 from request import request
 import zmq
 import json
 import threading
+from request import request
 
 PORT1 = '8082'
 PORT2 = '8083'
@@ -45,7 +47,28 @@ class Node():
 
         print("Started node ", (self.id, self.addr))
 
-        #Falta introducir nodo a la red??????????????????????????????????????????????????
+        client_requester = request(context = self.context_sender)
+        if introduction_node:
+            recieved_json = client_requester.make_request(json_to_send = {"command_name" : "join",
+                                                                         "method_params" : {}, 
+                                                                         "procedence_addr" : self.addr}, 
+                                                          destination_addr = introduction_node)
+            
+            while recieved_json is client_requester.error_json:                
+                client_requester.action_for_error(introduction_node)
+                print("Enter address to retry ")
+                introduction_node = input()
+                print("Connecting now to ", (introduction_node))
+                
+                recieved_json = client_requester.make_request(json_to_send = {"command_name" : "join", 
+                                                                              "method_params" : {}, 
+                                                                              "procedence_addr" : self.addr}, 
+                                                              destination_addr = introduction_node)
+                        
+        else:
+            self.predeccesor_addr, self.predeccesor_id = self.addr, self.id
+            
+            self.isPrincipal = True
 
 
     def waiting_for_commands(self, client_request):
@@ -123,6 +146,18 @@ class Node():
         
         #-----------------------------------------------------------------#
         return
+
+    def thread_verify (self):
+        countdown = time()
+        rand = Random()
+        rand.seed()
+        requester = request(context = self.context)
+        while True:
+            if abs (countdown - time( ) ) > self.waiting_time:
+                if self.predecessor_id != self.id:
+                    self.verify_active_nodes(sock_req = requester)                     
+                countdown = time()
+
     
     
     # Verificar si los nodos de la finger table siguen vivos
@@ -244,6 +279,9 @@ class Node():
             pass 
     """
 
+
+    def I_wanna_get_in(self):
+        pass
 
     # Método para calcular el id que debe tener en el chord una pc que desea entrar
     def calculate_id_in(self, address_request, initial_id, best_id, best_address_to_in, best_score, sock_req : request):
