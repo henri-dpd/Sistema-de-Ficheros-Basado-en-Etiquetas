@@ -43,15 +43,15 @@ class Node():
 
             print("Waiting")
             
-            buff = self.sock_rep.recv_json()
+            buffer = self.sock_rep.recv_json()
 
-            if buff['command_name'] in self.commands:
+            if buffer['command_name'] in self.commands:
                 
-                print(buff)
-                if buff['command_name'] in self.commands_request:
-                    self.commands[buff["command_name"]](**buff["method_params"], sock_req = client_request)
+                print(buffer)
+                if buffer['command_name'] in self.commands_request:
+                    self.commands[buffer["command_name"]](**buffer["method_params"], sock_req = client_request)
                 else:
-                    self.commands[buff["command_name"]](**buff["method_params"])
+                    self.commands[buffer["command_name"]](**buffer["method_params"])
 
 
 
