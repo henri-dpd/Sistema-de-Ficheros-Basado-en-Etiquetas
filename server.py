@@ -45,7 +45,7 @@ class Node():
                          }
         self.commands_request = {}
 
-        print("Started node ", (self.id, self.addr))
+        print("Started node ", (self.id, self.address))
 
         client_requester = request(context = self.context_sender)
         if introduction_node:
@@ -68,6 +68,8 @@ class Node():
             self.predeccesor_addr, self.predeccesor_id = self.addr, self.id
             
             self.isPrincipal = True
+
+        self.execute(client_requester)
 
 
     def waiting_for_commands(self, client_request):
@@ -117,10 +119,14 @@ class Node():
     def command_get_predecessor(self):
         self.sock_rep.send_json({"response": "ACK", "return_info": {"predecessor_id" : self.predecessor_id, "predecessor_address" : self.predecessor_address } } )
 
-    def command_get_succesor(self, x):
+    def command_get_successor(self, x):
         id, address = self.finger_table[x-1][0],self.finger_table[x-1][1]
         self.sock_rep.send_json({"response": "ACK", "return_info": {"successor_pos_x_id": id, "successor_pos_x_address": address}})
 
+    def execute(self, client_requester):
+        thread_verify = threading.Thread(target = self.verify, args =() )
+        thread_verify.start()        
+        self.waiting_for_commands(client_requester)
 
     # calculate id using sha hash
     def get_id(self, ip:int)-> str:
@@ -223,134 +229,8 @@ class Node():
         
         #Agrega el nodo a tu finger table
         self.finger_table.append((recv_json_successor[0],recv_json_successor[1]))
-        
-    #subscriter to broadcast
-    def broadcast_thread_funct(self,lock,socket)-> None:
-        while True:
-            recv_json =  json.loads(socket.recv_json())
-            if recv_json: #if there is something in recv_json
-                if("I-get-in" in recv_json):
-                    lock.acquire()
-                    ret_json = {"send-me-confirmation":self.ip}
-                    address = "tcp://"+ recv_json["I-get-in"] +":"+ PORT3
-                    self.socket_push.bind(address)
-                    self.socket_push.send_json(ret_json)
-                    lock.release()
-                    
-        
-    def pull_thread_funct(self,lock,socket)-> None:
-        while True:
-            recv_json =  json.loads(socket.recv_json())
-            if recv_json: #if there is something in recv_json
-                if("my-confirmation" in recv_json):
-                    lock.acquire()
-                    ret_json = {}
-                    ret_json["you-are-in"]["successor_id"] = self.id
-                    ret_json["you-are-in"]["successor_ip"] = self.ip
-                    ret_json["you-are-in"]["antecessor_id"] = self.antecessor_id
-                    ret_json["you-are-in"]["antecessor_ip"] = self.antecessor_ip
-                    address = "tcp://"+ recv_json["my-confirmation"] +":"+ PORT3
-                    self.socket_push.bind(address)
-                    self.socket_push.send_json(ret_json)
-                    lock.release()
-                if("give-me-my-info" in recv_json):
-                    lock.acquire()
-                    chord_successor = {}
-                    for object_id in self.chord:
-                        if object_id >= (2**recv_json["give-me-my-info"]["id"]) and object_id < (2** self.id):
-                            chord_successor[object_id] = self.chord[object_id]
-                            del(self.chord[object_id])
-                    finger_table = self.finger_table
-                    ret_json = {"here-you-are": {"chord":chord_successor, "finger-table":finger_table}}
-                    address = "tcp://"+ recv_json["give-me-my-info"]["ip"] +":"+ PORT3
-                    self.socket_push.bind(address)
-                    self.socket_push.send_json(ret_json)
-                    
-                    #Update my finger table
-                    new_element ={"id":recv_json["give-me-my-info"]["id"],"ip":recv_json["give-me-my-info"]["ip"]}
-                    self.finger_table.pop()
-                    self.finger_table.insert(0,new_element)
-                    
-                    #Update finger table of other nodes
-                    if len(self.finger_table) < math.log2(self.number_nodes)-1: 
-                        for i in self.finger_table:
-                            ret_json = {"update-finger-table": {"new-element": new_element, "count": 1}}
-                            address = "tcp://"+ i["ip"] +":"+ PORT3
-                            self.socket_push.bind(address)
-                            self.socket_push.send_json(ret_json)
-                    else:
-                        ret_json = {"update-finger-table": {"new-element": new_element, "count": math.log2(self.number_nodes)-1}}
-                        address = "tcp://"+ self.successor_ip +":"+ PORT3
-                        self.socket_push.bind(address)
-                        self.socket_push.send_json(ret_json)
-                    self.successor_id = recv_json["give-me-my-info"]["id"]
-                    self.successor_ip = recv_json["give-me-my-info"]["ip"]
-                    lock.release()
-                if "update-finger-table" in recv_json:
-                    lock.acquire()
-                    new_element = recv_json["update-finger-table"]["new-element"]
-                    self.finger_table.pop()
-                    self.finger_table.insert(0,new_element)
-                    count = recv_json["update-finger-table"]["new-element"]
-                    if count > 1:
-                        ret_json = {"update-finger-table": {"new-element": new_element, "count": count-1}}
-                        address = "tcp://"+ self.successor_ip +":"+ PORT3
-                        self.socket_push.bind(address)
-                        self.socket_push.send_json(ret_json)
-                    lock.remove()
-                    
-    # wait request
-    def request (self,lock,socket)-> json:
-        start_time = time.time()
-        recived = False
-        while True:
-            actual_time = time.time() 
-            if(actual_time-start_time > 30):
-                break
-            recv_json =  json.loads(socket.recv_json())
-            if recv_json: #if there is something in recv_json
-                if("send-me-confirmation" in recv_json and not recived):
-                    lock.acquire()
-                    ret_json = {"my-confirmation":self.ip}
-                    address = "tcp://"+ recv_json["send-me-confirmation"] +":"+ PORT3
-                    self.socket_push.bind(address)
-                    self.socket_push.send_json(ret_json)
-                    lock.release()
-                    recived = True
-                if("you-are-in" in recv_json):
-                    lock.acquire() 
-                    self.successor_id = recv_json["successor_id"]
-                    self.successor_ip = recv_json["successor_ip"]
-                    self.antecessor_id = recv_json["antecessor_id"]
-                    self.antecessor_ip = recv_json["antecessor_ip"]
-                    lock.release()
-                    break # break out of loop and end
-        return recv_json
-        
-    def update_finger_table(self) -> None:
-        if self.antecessor_ip == None:
-            self.successor_id =  self.id
-            self.successor_ip =  self.ip
-            self.antecessor_id = self.id 
-            self.antecessor_ip = self.ip 
-            return
-        # update my objects
-        socket = self.socket_push
-        address = "tcp://"+ self.antecessor_ip +":"+ PORT3
-        socket.bind(address) 
-        ret_json = {"give-me-my-info": { "ip":self.ip,"id":self.id}}
-        socket.send_json(ret_json)
-        
-        # get message from antecessor
-        socket = self.socket_pull
-        address = "tcp://"+ self.antecessor_ip +":"+ PORT4
-        self.socket_pull.bind(address) 
-        objects_lock = threading.Lock()
-        #Open Thread
-        get_objects_thread = threading.Thread(target = self.get_objects_thread_funct, args = (self,objects_lock,self.socket_pull))
-        get_objects_thread.start()
-        get_objects_thread.join()
-        
+
+    """         
     def get_objects_thread_funct(self, lock, socket):
         start_time = time.time()
         recived = False
@@ -402,7 +282,8 @@ class Node():
         if label in self.labels:
             ################
             # Enviar todos los archivos correspondientes al ip_request
-            pass
+            pass 
+    """
 
 
     # Método para calcular el id que debe tener en el chord una pc que desea entrar
@@ -545,12 +426,19 @@ class Node():
                                              destination_addr = self.antecessor_address)
 
 
-
+    # Método para reemplazar un nodo predecesor
     def replace_anteccessor(self, new_predecessor_address, new_predecessor_id, sock_req : request):
         self.antecessor_id = new_predecessor_id
         self.antecessor_address = new_predecessor_address
 
+
+    # Método para estabilizar las finger table de los nodos anteriores
     def replace_finger_table_consecutive(self, finger_table, iterations, sock_req: request):
+        for i in range(len(finger_table)):
+            if (self.id, self.address) == finger_table[i]:
+                del(finger_table[i])
+                break
+            
         self.finger_table = finger_table
         if iterations > 0:
             finger_table_to_send = self.finger_table.copy()
