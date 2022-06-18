@@ -2,6 +2,8 @@ import hashlib
 from random import Random
 import math
 import time
+
+from numpy import size
 from request import request
 import zmq
 import threading
@@ -71,7 +73,6 @@ class Node():
                         
         else:
             self.predeccesor_address, self.predeccesor_id = self.address, self.id
-
             self.isPrincipal = True
 
         self.execute(client_requester)
@@ -376,20 +377,20 @@ class Node():
         
         successor_id = self.finger_table[0][0]
 
-        if self.id < self.successor_id:
-            if self.successor_id - self.id > best_score:
-                best_score = self.successor_id - self.id
-                best_id = self.id + self.successor_id
+        if self.id < successor_id:
+            if successor_id - self.id > best_score:
+                best_score = successor_id - self.id
+                best_id = self.id + successor_id
                 if best_id % 2 == 0:
                     best_id = best_id / 2
                 else:
                     best_id = (best_id / 2) + 1
                 best_address_to_in = self.address
         else:
-            if self.size - self.id + self.successor_id > best_score:
-                best_score = self.size - self.id + self.successor_id
+            if self.size - self.id + successor_id > best_score:
+                best_score = self.size - self.id + successor_id
 
-                best_id = self.id + self.size + self.successor_id
+                best_id = self.id + self.size + successor_id
                 
                 if best_id % 2 == 0:
                     best_id = best_id / 2
@@ -439,8 +440,8 @@ class Node():
                     else:
                         best_id = (best_id / 2) + 1
 
-                    if best_id > self.number_nodes:
-                        best_id = best_id - self.number_nodes
+                    if best_id > self.size:
+                        best_id = best_id - self.size
                     best_address_to_in = self.finger_table[i][1]
 
         # Enviar todos los datos actuales al nodo en la última posición de la finger table
