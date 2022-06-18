@@ -1,4 +1,3 @@
-
 import hashlib
 import math
 import time
@@ -13,25 +12,91 @@ PORT3 = '8084'
 PORT4 = '8085'
 
 class Node():
-    def __init__(self, address, introduction_node = None, debug_print = False):
+    def __init__(self, address, introduction_node = None):
         self.address = address
         self.id = lambda input_to_id : 0
-        self.debug_print = debug_print      
         self.context = zmq.Context()
         self.size = 64
-        self.length_verify = 3        
+        self.length_verify = 3
         self.verify = [(self.id, self.address) for i in range(self.length_verify)]
         self.start = lambda i : (self.id + 2**(i)) % 2**self.size
-        self.finger_table = [None for i in range(self.size)]
+        self.finger_table_length = math.log2(self.size)
+        self.finger_table = [None for i in range(self.finger_table_length)]
         self.waiting_time = 10
         self.nodes_to_keep = 2
+        self.predecessor_id = None
+        self.predecessor_address = None
     
         #crear comandos???????????????????????????????????????????????????????????????????
-        self.commands = {}
+        self.commands = {"join": self.command_join, 
+                         "are_you_alive": self.command_are_you_alive,
+                         "get_params": self.command_get_params, 
+                         "get_prop": self.command_get_prop,
+                         "get_predecessor": self.command_get_predecessor,
+                         "get_successor": self. command_get_successor,
+                         "find_successor": self.command_find_successor,
+                         "find_predecessor": self.command_find_predecessor,
+                         "calculate_id_in" : self.calculate_id_in,
+                         "get_in_new_node" : self.get_in_new_node,
+                         "replace_anteccessor" : self.replace_anteccessor,
+                         "replace_finger_table_consecutive" : self.replace_finger_table_consecutive
+                         }
+        self.commands_request = {}
 
-        if self.debug_print: print("Started node ", (self.id, self.addr))
+        print("Started node ", (self.id, self.addr))
 
         #Falta introducir nodo a la red??????????????????????????????????????????????????
+
+
+    def waiting_for_commands(self, client_request):
+        
+        self.sock_rep = self.context.socket(zmq.REP)
+        self.sock_rep.bind("tcp://" + self.addr)    
+                
+        while True:
+
+            print("Waiting")
+            
+            buffer = self.sock_rep.recv_json()
+
+            if buffer['command_name'] in self.commands:
+                
+                print(buffer)
+                if buffer['command_name'] in self.commands_request:
+                    self.commands[buffer["command_name"]](**buffer["method_params"], sock_req = client_request)
+                else:
+                    self.commands[buffer["command_name"]](**buffer["method_params"])
+
+
+
+    def command_join(self):
+        self.sock_rep.send_json({"response": "ACK_to_join", "return_info": {}})
+
+    def command_find_successor(self):
+        id, address = self.finger_table[0][0],self.finger_table[0][1]
+        self.sock_rep.send_json({"response": "ACK", "return_info": {"successor_id": id, "successor_address": address}})
+
+    def command_find_predecessor(self):
+        self.sock_rep.send_json({"response": "ACK", "return_info": {"predecessor_id": self.predecessor_id, "predecessor_address": self.predecessor_address}, "procedence_address": self.address } )
+
+    def command_are_you_alive(self):
+        self.sock_rep.send_json({"response": "ACK", "procedence_addr": self.address})
+
+    def command_get_params(self):        
+        self.sock_rep.send_json({"response": "ACK", "return_info": {"finger_table" : self.finger_table, "predecessor_id": self.predecessor_id, "predecessor_address": self.predecessor_address, "id": self.id, "address": self.address } })
+
+    def command_get_prop(self, prop_name):
+        if prop_name == "start_indexes":
+            self.sock_rep.send_json({'response': "ACK", "return_info" : [self.start(i) for i in range(self.size)] })    
+
+        self.sock_rep.send_json({'response': 'ACK', "return_info": self.__dict__[prop_name] })
+
+    def command_get_predecessor(self):
+        self.sock_rep.send_json({"response": "ACK", "return_info": {"predecessor_id" : self.predecessor_id, "predecessor_address" : self.predecessor_address } } )
+
+    def command_get_succesor(self, x):
+        id, address = self.finger_table[x-1][0],self.finger_table[x-1][1]
+        self.sock_rep.send_json({"response": "ACK", "return_info": {"successor_pos_x_id": id, "successor_pos_x_address": address}})
 
 
     # calculate id using sha hash
@@ -306,7 +371,7 @@ class Node():
 
 
     # Método para calcular el id que debe tener en el chord una pc que desea entrar
-    def calculate_id_in(self, ip_request, initial_id, best_id, best_ip_to_in, best_score):
+    def calculate_id_in(self, address_request, initial_id, best_id, best_address_to_in, best_score, sock_req : request):
 
         #La idea es calcular el mayor espaciamiento entre dos nodos en el chord
         # best_score inicia en 1 para que no se elijan nodos consecutivos
@@ -315,8 +380,8 @@ class Node():
             initial_id = self.id
         
         if len(self.finger_table) == 0: # Si solo hay un nodo en el chord
-            if self.id < self.number_nodes - self.id:
-                best_id = self.number_nodes + self.id
+            if self.id < self.size - self.id:
+                best_id = self.size + self.id
             else:
                 best_id = self.id
 
@@ -324,8 +389,7 @@ class Node():
                 best_id = best_id / 2
             else:
                 best_id = (best_id / 2) + 1
-            # Entrar al nodo
-            # Enviar mensaje al ip_request de que fue entrado al chord
+            self.get_in_new_node(address_request, best_id, sock_req)
             
 
         # Primero calculamos el espaciamiento entre esta pc y la siguiente
@@ -338,21 +402,21 @@ class Node():
                     best_id = best_id / 2
                 else:
                     best_id = (best_id / 2) + 1
-                best_ip_to_in = self.ip
+                best_address_to_in = self.address
         else:
-            if self.number_nodes - self.id + self.successor_id > best_score:
-                best_score = self.number_nodes - self.id + self.successor_id
+            if self.size - self.id + self.successor_id > best_score:
+                best_score = self.size - self.id + self.successor_id
 
-                best_id = self.id + self.number_nodes + self.successor_id
+                best_id = self.id + self.size + self.successor_id
                 
                 if best_id % 2 == 0:
                     best_id = best_id / 2
                 else:
                     best_id = (best_id / 2) + 1
 
-                if best_id > self.number_nodes:
-                    best_id = best_id - self.number_nodes
-                best_ip_to_in = self.ip
+                if best_id > self.size:
+                    best_id = best_id - self.size
+                best_address_to_in = self.address
 
         # Luego revisamos todos los espaciamientos en la finger table
 
@@ -364,7 +428,13 @@ class Node():
             if self.finger_table[i][0] == initial_id:
                 # Ya con esto recorrimos todo el chord y encontramos el mejor espaciamiento
                 # Ahora le enviamos ese mensaje al nodo designado para que reciba al nuevo nodo
-                return
+                recv_json = sock_req.make_request(json_to_send = {"command_name" : "get_in_new_node", 
+                                                                  "method_params" : {"address_to_get_in": address_request,
+                                                                                     "id_to_place": best_id}},
+                                          requester_object = self,
+                                          destination_addr = best_address_to_in)
+                return 0
+
 
 
             if  first_id < second_id:
@@ -375,12 +445,12 @@ class Node():
                         best_id = best_id / 2
                     else:
                         best_id = (best_id / 2) + 1
-                    best_ip_to_in = self.ip
+                    best_address_to_in = self.finger_table[i][1]
             else:
-                if self.number_nodes - first_id + second_id > best_score:
-                    best_score = self.number_nodes - first_id + second_id
+                if self.size - first_id + second_id > best_score:
+                    best_score = self.size - first_id + second_id
 
-                    best_id = first_id + self.number_nodes + second_id
+                    best_id = first_id + self.size + second_id
                     
                     if best_id % 2 == 0:
                         best_id = best_id / 2
@@ -389,7 +459,73 @@ class Node():
 
                     if best_id > self.number_nodes:
                         best_id = best_id - self.number_nodes
-                    best_ip_to_in = self.ip
+                    best_address_to_in = self.finger_table[i][1]
 
         # Enviar todos los datos actuales al nodo en la última posición de la finger table
-        
+        recv_json = sock_req.make_request(json_to_send = {"command_name" : "calculate_id_in", 
+                                                                  "method_params" : {"address_request": address_request,
+                                                                                     "initial_id" : initial_id, 
+                                                                                     "best_id" : best_id, 
+                                                                                     "best_address_to_in" : best_address_to_in,
+                                                                                     "best_score" : best_score}},
+                                          requester_object = self,
+                                          destination_addr = best_address_to_in)
+
+
+    # Método para que un nodo entre a otro como su sucesor en el chord
+    def get_in_new_node(self, address_to_get_in, id_to_place, sock_req : request):
+        # Primero le damos nuestra finger table para que actualice la suya
+        recv_json = sock_req.make_request(json_to_send = {"command_name" : "get_in_to_chord_succefully", 
+                                                          "method_params" : {"id" : id_to_place,
+                                                                             "finger_table" : self.finger_table,
+                                                                             "anteccessor_address" : self.address,
+                                                                             "anteccessor_id" : self.id}},
+                                          requester_object = self,
+                                          destination_addr = address_to_get_in)
+
+        if not recv_json is sock_req.error_json:
+            #Luego actualizamos el antecesor del  sucesor del nuevo nodo
+            recv_json = sock_req.make_request(json_to_send = {"command_name" : "replace_anteccessor", 
+                                                              "method_params" : {"new_predecessor_address" : None,
+                                                                                 "new_predecessor_id": None}},
+                                             requester_object = self,
+                                             destination_addr = self.finger_table[0][1])
+
+            if not recv_json is sock_req.error_json:
+                # Luego modificamos la finger table del nodo actual
+                if len(self.finger_table) == self.finger_table_length:
+                    self.finger_table = self.finger_table[:len(self.finger_table) - 1]
+                self.finger_table.insert(0, [id_to_place, address_to_get_in])
+
+                finger_table_to_send = self.finger_table.copy()
+                if len(finger_table_to_send) < self.finger_table_length:
+                    finger_table_to_send = finger_table_to_send[:len(finger_table_to_send) - 1]
+                finger_table_to_send.insert(0, [self.id, self.address])
+
+                # Y comenzamos a avisarle al resto de nodos anteriores de que actualicen su finger table
+                recv_json = sock_req.make_request(json_to_send = {"command_name" : "replace_finger_table_consecutive", 
+                                                                  "method_params" : {"finger_table": finger_table_to_send,
+                                                                                     "iterations": len(self.finger_table)}},
+                                             requester_object = self,
+                                             destination_addr = self.antecessor_address)
+
+
+
+    def replace_anteccessor(self, new_predecessor_address, new_predecessor_id, sock_req : request):
+        self.antecessor_id = new_predecessor_id
+        self.antecessor_address = new_predecessor_address
+
+    def replace_finger_table_consecutive(self, finger_table, iterations, sock_req: request):
+        self.finger_table = finger_table
+        if iterations > 0:
+            finger_table_to_send = self.finger_table.copy()
+            if len(finger_table_to_send) < self.finger_table_length:
+                finger_table_to_send = finger_table_to_send[:len(finger_table_to_send) - 1]
+            finger_table_to_send.insert(0, [self.id, self.address])
+
+            # Y comenzamos a avisarle al resto de nodos anteriores de que actualicen su finger table
+            recv_json = sock_req.make_request(json_to_send = {"command_name" : "replace_finger_table_consecutive", 
+                                                                "method_params" : {"finger_table": finger_table_to_send,
+                                                                                    "iterations": iterations - 1}},
+                                            requester_object = self,
+                                            destination_addr = self.antecessor_address)

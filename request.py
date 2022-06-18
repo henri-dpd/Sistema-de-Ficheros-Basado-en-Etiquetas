@@ -2,16 +2,15 @@ import zmq
 
 
 class request:
-    def __init__(self, context, debug_print, error = "ERROR",  request_timeout = 6e3, request_retries = 3):
+    def __init__(self, context, error = "ERROR",  request_timeout = 6e3, request_retries = 3):
         
         self.request_timeout = request_timeout
         self.request_retries = request_retries
         self.context = context
         self.error = error            
         self.socket_request = self.context.socket(zmq.REQ)
-        self.debug_print = debug_print
 
-    def make_request(self, json_to_send, destination_address, destination_id, requester_object = None, asked_properties = None, method_for_wrap = None, procedence = None):        
+    def make_request(self, json_to_send, destination_address, requester_object = None, asked_properties = None, method_for_wrap = None):        
         if asked_properties and destination_address == json_to_send['procedence_address']:
             
             return {"response": "ACK", "procedence_address": json_to_send['procedence_address'], "return_info": {asked_property: requester_object.__dict__[asked_property] for asked_property in asked_properties } }
