@@ -29,7 +29,7 @@ class Node():
         self.predecessor_id = None
         self.predecessor_address = None
     
-        #crear comandos???????????????????????????????????????????????????????????????????
+        #crear comandos
         self.commands = {"join": self.command_join, 
                          "are_you_alive": self.command_are_you_alive,
                          "get_params": self.command_get_params, 
@@ -43,7 +43,6 @@ class Node():
                          "replace_anteccessor" : self.replace_anteccessor,
                          "replace_finger_table_consecutive" : self.replace_finger_table_consecutive
                          }
-        self.commands_request = {}
 
         print("Started node ", (self.id, self.address))
 
@@ -70,7 +69,7 @@ class Node():
             
             self.isPrincipal = True
 
-        self.execute()
+        self.execute(client_requester)
 
 
     def waiting_for_commands(self, client_request):
@@ -124,7 +123,6 @@ class Node():
         self.sock_rep.send_json({"response": "ACK", "return_info": {"successor_pos_x_id": id, "successor_pos_x_address": address}})
 
     def execute(self, client_requester):
-        
         thread_verify = threading.Thread(target = self.verify, args =() )
         thread_verify.start()        
         self.waiting_for_commands(client_requester)
@@ -411,9 +409,6 @@ class Node():
             # Enviar todos los archivos correspondientes al ip_request
             pass
 
-
-    def I_wanna_get_in(self):
-        pass
 
     # Método para calcular el id que debe tener en el chord una pc que desea entrar
     def calculate_id_in(self, address_request, initial_id, best_id, best_address_to_in, best_score, sock_req : request):
