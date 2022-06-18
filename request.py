@@ -9,9 +9,8 @@ class request:
         self.context = context
         self.error = error            
         self.socket_request = self.context.socket(zmq.REQ)
-        self.debug_print = debug_print
 
-    def make_request(self, json_to_send, destination_address, destination_id, requester_object = None, asked_properties = None, method_for_wrap = None, procedence = None):        
+    def make_request(self, json_to_send, destination_address, requester_object = None, asked_properties = None, method_for_wrap = None):        
         if asked_properties and destination_address == json_to_send['procedence_address']:
             
             return {"response": "ACK", "procedence_address": json_to_send['procedence_address'], "return_info": {asked_property: requester_object.__dict__[asked_property] for asked_property in asked_properties } }

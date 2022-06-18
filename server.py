@@ -1,4 +1,3 @@
-
 import hashlib
 import math
 import time
@@ -23,13 +22,53 @@ class Node():
         self.start = lambda i : (self.id + 2**(i)) % 2**self.size
         self.finger_table = [None for i in range(self.size)]
         self.waiting_time = 10
+        self.predecessor = None
     
         #crear comandos???????????????????????????????????????????????????????????????????
-        self.commands = {}
+        self.commands = {"join": self.command_join, "find_successor": self.command_find_successor,
+                         "find_predecessor": self.command_find_predecessor}
+        self.commands_request = {}
 
         if self.debug_print: print("Started node ", (self.id, self.addr))
 
         #Falta introducir nodo a la red??????????????????????????????????????????????????
+
+
+    def waiting_for_commands(self, client_request):
+        
+        self.sock_rep = self.context.socket(zmq.REP)
+        self.sock_rep.bind("tcp://" + self.addr)    
+                
+        while True:
+
+            print("Waiting")
+            
+            buff = self.sock_rep.recv_json()
+
+            if buff['command_name'] in self.commands:
+                
+                print(buff)
+                if buff['command_name'] in self.commands_request:
+                    self.commands[buff["command_name"]](**buff["method_params"], sock_req = client_request)
+                else:
+                    self.commands[buff["command_name"]](**buff["method_params"])
+
+
+
+    def command_join(self):
+        self.sock_rep.send_json({"response": "ACK_to_join", "return_info": {}})
+
+    def command_find_successor(self):
+        id_ip = (self.finger_table[0][0],self.finger_table[0][1])
+        self.sock_rep.send_json({"response": "ACK", "return_info": id_ip})
+
+    def command_find_predecessor(self):
+        id, ip = self.predecessor
+        self.sock_rep.send_json({"response": "ACK", "return_info": {"predecessor_id": id, "predecessor_ip": ip}, "procedence_address": self.address } )
+
+
+
+
 
 
     # calculate id using sha hash
