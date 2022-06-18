@@ -1,2 +1,1 @@
-netifaces==0.10.4
 pyzmq==22.3.0
