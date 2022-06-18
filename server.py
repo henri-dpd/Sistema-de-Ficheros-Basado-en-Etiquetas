@@ -3,14 +3,13 @@ import hashlib
 import math
 import time
 import zmq
-import netifaces as ni
 import json
 import threading
 
-PORT1 = '8002'
-PORT2 = '8003'
-PORT3 = '8004'
-PORT4 = '8005'
+PORT1 = '8082'
+PORT2 = '8083'
+PORT3 = '8084'
+PORT4 = '8085'
 
 class Node():
     def __init__(self, address, introduction_node = None, debug_print = False):
@@ -32,24 +31,6 @@ class Node():
 
         #Falta introducir nodo a la red??????????????????????????????????????????????????
 
-
-
-    # get ip of the pc
-    def get_ip_broadcast(self) -> str:
-        return '127.10.0.1', '127.10.255.255'
-        interfaces = ni.interfaces()
-        if 'vmnet1' in interfaces: 
-            return ni.ifaddresses('vmnet1')[ni.AF_INET][0]['addr'], ni.ifaddresses('vmnet1')[ni.AF_INET][0]['broadcast']
-        elif 'vmnet8' in interfaces: 
-            return ni.ifaddresses('vmnet8')[ni.AF_INET][0]['addr'], ni.ifaddresses('vmnet8')[ni.AF_INET][0]['broadcast']
-        elif 'docker0' in interfaces:
-            return ni.ifaddresses('docker0')[ni.AF_INET][0]['addr'], ni.ifaddresses('docker0')[ni.AF_INET][0]['broadcast']
-        elif 'enp3s0f1' in interfaces:
-            return ni.ifaddresses('enp3s0f1')[ni.AF_INET][0]['addr'], ni.ifaddresses('enp3s0f1')[ni.AF_INET][0]['broadcast']
-        elif 'wlp2s0' in interfaces: 
-            return ni.ifaddresses('wlp2s0')[ni.AF_INET][0]['addr'], ni.ifaddresses('wlp2s0')[ni.AF_INET][0]['broadcast']
-        else:
-            return ni.ifaddresses(interfaces[0])[ni.AF_INET][0]['addr'], ni.ifaddresses(interfaces[0])[ni.AF_INET][0]['broadcast']
 
     # calculate id using sha hash
     def get_id(self, ip:int)-> str:
@@ -344,3 +325,4 @@ class Node():
                     best_ip_to_in = self.ip
 
         # Enviar todos los datos actuales al nodo en la última posición de la finger table
+        
