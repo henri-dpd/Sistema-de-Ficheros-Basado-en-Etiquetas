@@ -13,22 +13,22 @@ PORT3 = '8004'
 PORT4 = '8005'
 
 class Node():
-    def __init__(self, address, introduction_node = None, debug_print = False):
+    def __init__(self, address, introduction_node = None):
         self.address = address
         self.id = lambda input_to_id : 0
-        self.debug_print = debug_print      
         self.context = zmq.Context()
         self.size = 64
-        self.length_verify = 3        
+        self.length_verify = 3
         self.verify = [(self.id, self.address) for i in range(self.length_verify)]
         self.start = lambda i : (self.id + 2**(i)) % 2**self.size
-        self.finger_table = [None for i in range(self.size)]
+        self.finger_table_length = math.log2(self.size)
+        self.finger_table = [None for i in range(self.finger_table_length)]
         self.waiting_time = 10
     
         #crear comandos???????????????????????????????????????????????????????????????????
-        self.commands = {}
+        self.commands = {"FIND_BEST_ID" : self.calculate_id_in}
 
-        if self.debug_print: print("Started node ", (self.id, self.addr))
+        print("Started node ", (self.id, self.addr))
 
         #Falta introducir nodo a la red??????????????????????????????????????????????????
 
@@ -344,3 +344,21 @@ class Node():
                     best_ip_to_in = self.ip
 
         # Enviar todos los datos actuales al nodo en la última posición de la finger table
+
+
+    # Método para que un nodo entre a otro como su sucesor en el chord
+    def get_in_new_node(self, ip_to_get_in, id_to_place, sock_req : request):
+        # Primero le damos nuestra finger table para que actualice la suya
+        recv_json = sock_req.make_request(json_to_send = {"command_name" : "Put_new_node_as_successor", 
+                                                          "method_params" : {"id" : id_to_place,
+                                                                             "finger_table" : self.finger_table,
+                                                                             "anteccessor_address" : self.address,
+                                                                             "anteccessor_id" : self.id}},
+                                          requester_object = self,
+                                          destination_addr = ip_to_get_in)
+
+        if not recv_json is sock_req.error_json:
+
+            if len(self.finger_table) == self.finger_table_length:
+                self.finger_table = self.finger_table[:len(self.finger_table) - 1]
+            self.finger_table.insert(0, [id_to_place, ip_to_get_in])
