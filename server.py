@@ -28,8 +28,8 @@ class Node():
         self.nodes_to_keep = 2
         self.predecessor_id = None
         self.predecessor_address = None
+        self.isPrincipal = False
     
-        #crear comandos???????????????????????????????????????????????????????????????????
         self.commands = {"join": self.command_join, 
                          "are_you_alive": self.command_are_you_alive,
                          "get_params": self.command_get_params, 
@@ -50,18 +50,17 @@ class Node():
         client_requester = request(context = self.context_sender)
         if introduction_node:
             recieved_json = client_requester.make_request(json_to_send = {"command_name" : "join",
-                                                                         "method_params" : {}, 
+                                                                         "method_params" : {"address_for_in" : self.address}, 
                                                                          "procedence_addr" : self.addr}, 
                                                           destination_addr = introduction_node)
             
             while recieved_json is client_requester.error_json:                
                 client_requester.action_for_error(introduction_node)
-                print("Enter address to retry ")
-                introduction_node = input()
+
                 print("Connecting now to ", (introduction_node))
                 
                 recieved_json = client_requester.make_request(json_to_send = {"command_name" : "join", 
-                                                                              "method_params" : {}, 
+                                                                              "method_params" : {"address_for_in" : self.address}, 
                                                                               "procedence_addr" : self.addr}, 
                                                               destination_addr = introduction_node)
                         
@@ -92,8 +91,9 @@ class Node():
 
 
 
-    def command_join(self):
+    def command_join(self, node_address, sock_req : request):
         self.sock_rep.send_json({"response": "ACK_to_join", "return_info": {}})
+        self.calculate_id_in(node_address, self.id, None, None, 1, sock_req)
 
     def command_find_successor(self):
         id, address = self.finger_table[0][0],self.finger_table[0][1]
@@ -404,9 +404,6 @@ class Node():
             # Enviar todos los archivos correspondientes al ip_request
             pass
 
-
-    def I_wanna_get_in(self):
-        pass
 
     # Método para calcular el id que debe tener en el chord una pc que desea entrar
     def calculate_id_in(self, address_request, initial_id, best_id, best_address_to_in, best_score, sock_req : request):
