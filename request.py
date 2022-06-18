@@ -10,7 +10,7 @@ class request:
         self.error = error            
         self.socket_request = self.context.socket(zmq.REQ)
 
-    def make_request(self, json_to_send, destination_address, destination_id, requester_object = None, asked_properties = None, method_for_wrap = None, procedence = None):        
+    def make_request(self, json_to_send, destination_address, requester_object = None, asked_properties = None, method_for_wrap = None):        
         if asked_properties and destination_address == json_to_send['procedence_address']:
             
             return {"response": "ACK", "procedence_address": json_to_send['procedence_address'], "return_info": {asked_property: requester_object.__dict__[asked_property] for asked_property in asked_properties } }
@@ -51,4 +51,6 @@ class request:
 
         return self.error
         
+    def action_for_error(self, destination_addr):
         
+        print('Remember: %s is dead' %destination_addr)    

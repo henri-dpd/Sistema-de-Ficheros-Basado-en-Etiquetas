@@ -1,16 +1,14 @@
-
 import hashlib
 import math
 import time
 import zmq
-import netifaces as ni
 import json
 import threading
 
-PORT1 = '8002'
-PORT2 = '8003'
-PORT3 = '8004'
-PORT4 = '8005'
+PORT1 = '8082'
+PORT2 = '8083'
+PORT3 = '8084'
+PORT4 = '8085'
 
 class Node():
     def __init__(self, address, introduction_node = None):
@@ -24,32 +22,56 @@ class Node():
         self.finger_table_length = math.log2(self.size)
         self.finger_table = [None for i in range(self.finger_table_length)]
         self.waiting_time = 10
+        self.predecessor = None
     
         #crear comandos???????????????????????????????????????????????????????????????????
-        self.commands = {"FIND_BEST_ID" : self.calculate_id_in}
+        self.commands = {"join": self.command_join, 
+                         "find_successor": self.command_find_successor,
+                         "find_predecessor": self.command_find_predecessor,
+                         "find_best_id" : self.calculate_id_in}
+        self.commands_request = {}
 
         print("Started node ", (self.id, self.addr))
 
         #Falta introducir nodo a la red??????????????????????????????????????????????????
 
 
+    def waiting_for_commands(self, client_request):
+        
+        self.sock_rep = self.context.socket(zmq.REP)
+        self.sock_rep.bind("tcp://" + self.addr)    
+                
+        while True:
 
-    # get ip of the pc
-    def get_ip_broadcast(self) -> str:
-        return '127.10.0.1', '127.10.255.255'
-        interfaces = ni.interfaces()
-        if 'vmnet1' in interfaces: 
-            return ni.ifaddresses('vmnet1')[ni.AF_INET][0]['addr'], ni.ifaddresses('vmnet1')[ni.AF_INET][0]['broadcast']
-        elif 'vmnet8' in interfaces: 
-            return ni.ifaddresses('vmnet8')[ni.AF_INET][0]['addr'], ni.ifaddresses('vmnet8')[ni.AF_INET][0]['broadcast']
-        elif 'docker0' in interfaces:
-            return ni.ifaddresses('docker0')[ni.AF_INET][0]['addr'], ni.ifaddresses('docker0')[ni.AF_INET][0]['broadcast']
-        elif 'enp3s0f1' in interfaces:
-            return ni.ifaddresses('enp3s0f1')[ni.AF_INET][0]['addr'], ni.ifaddresses('enp3s0f1')[ni.AF_INET][0]['broadcast']
-        elif 'wlp2s0' in interfaces: 
-            return ni.ifaddresses('wlp2s0')[ni.AF_INET][0]['addr'], ni.ifaddresses('wlp2s0')[ni.AF_INET][0]['broadcast']
-        else:
-            return ni.ifaddresses(interfaces[0])[ni.AF_INET][0]['addr'], ni.ifaddresses(interfaces[0])[ni.AF_INET][0]['broadcast']
+            print("Waiting")
+            
+            buffer = self.sock_rep.recv_json()
+
+            if buffer['command_name'] in self.commands:
+                
+                print(buffer)
+                if buffer['command_name'] in self.commands_request:
+                    self.commands[buffer["command_name"]](**buffer["method_params"], sock_req = client_request)
+                else:
+                    self.commands[buffer["command_name"]](**buffer["method_params"])
+
+
+
+    def command_join(self):
+        self.sock_rep.send_json({"response": "ACK_to_join", "return_info": {}})
+
+    def command_find_successor(self):
+        id_ip = (self.finger_table[0][0],self.finger_table[0][1])
+        self.sock_rep.send_json({"response": "ACK", "return_info": id_ip})
+
+    def command_find_predecessor(self):
+        id, ip = self.predecessor
+        self.sock_rep.send_json({"response": "ACK", "return_info": {"predecessor_id": id, "predecessor_ip": ip}, "procedence_address": self.address } )
+
+
+
+
+
 
     # calculate id using sha hash
     def get_id(self, ip:int)-> str:
@@ -344,7 +366,6 @@ class Node():
                     best_ip_to_in = self.ip
 
         # Enviar todos los datos actuales al nodo en la última posición de la finger table
-
 
     # Método para que un nodo entre a otro como su sucesor en el chord
     def get_in_new_node(self, ip_to_get_in, id_to_place, sock_req : request):
