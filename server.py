@@ -31,6 +31,8 @@ class Node():
     
         #crear comandos
         self.commands = {"join": self.command_join, 
+                         "verify_alive_node": self.command_verify_alive_nodes,
+                         "it_lost_a_node": self.command_it_lost_a_node,
                          "are_you_alive": self.command_are_you_alive,
                          "get_params": self.command_get_params, 
                          "get_prop": self.command_get_prop,
@@ -43,6 +45,8 @@ class Node():
                          "replace_anteccessor" : self.replace_anteccessor,
                          "replace_finger_table_consecutive" : self.replace_finger_table_consecutive
                          }
+
+        self.commands_request = { "verify_alive_node", "it_lost_a_node" }
 
         print("Started node ", (self.id, self.address))
 
@@ -74,6 +78,7 @@ class Node():
 
     def waiting_for_commands(self, client_request):
         
+        print("Entro a waiting for commands")
         self.sock_rep = self.context.socket(zmq.REP)
         self.sock_rep.bind("tcp://" + self.addr)    
                 
@@ -87,8 +92,10 @@ class Node():
                 
                 print(buffer)
                 if buffer['command_name'] in self.commands_request:
+                    print("comando con request")
                     self.commands[buffer["command_name"]](**buffer["method_params"], sock_req = client_request)
                 else:
+                    print("comando sin request")
                     self.commands[buffer["command_name"]](**buffer["method_params"])
 
 
@@ -97,34 +104,51 @@ class Node():
         self.sock_rep.send_json({"response": "ACK_to_join", "return_info": {}})
 
     def command_find_successor(self):
+        print("entro comando find successor")
         id, address = self.finger_table[0][0],self.finger_table[0][1]
         self.sock_rep.send_json({"response": "ACK", "return_info": {"successor_id": id, "successor_address": address}})
+        print("termino comando find successor")
 
     def command_find_predecessor(self):
+        print("entro comando find predcessor")
         self.sock_rep.send_json({"response": "ACK", "return_info": {"predecessor_id": self.predecessor_id, "predecessor_address": self.predecessor_address}, "procedence_address": self.address } )
+        print("salio comando find predecessor")
 
     def command_are_you_alive(self):
+        print("entro comando are you alive")
         self.sock_rep.send_json({"response": "ACK", "procedence_addr": self.address})
+        print("salio comando are you alive")
 
-    def command_get_params(self):        
+    def command_get_params(self):  
+        print("entro comando get params")      
         self.sock_rep.send_json({"response": "ACK", "return_info": {"finger_table" : self.finger_table, "predecessor_id": self.predecessor_id, "predecessor_address": self.predecessor_address, "id": self.id, "address": self.address } })
+        print("salio comando get params")
 
     def command_get_prop(self, prop_name):
+        print("entro comando get prop")
         if prop_name == "start_indexes":
             self.sock_rep.send_json({'response': "ACK", "return_info" : [self.start(i) for i in range(self.size)] })    
 
         self.sock_rep.send_json({'response': 'ACK', "return_info": self.__dict__[prop_name] })
+        print("salio comando get prop")
 
     def command_get_predecessor(self):
+        print("entro comando get predecessor")
         self.sock_rep.send_json({"response": "ACK", "return_info": {"predecessor_id" : self.predecessor_id, "predecessor_address" : self.predecessor_address } } )
+        print("salio comando get predecessor")
 
     def command_get_successor(self, x):
+        print("entro comando get successor")
         id, address = self.finger_table[x-1][0],self.finger_table[x-1][1]
         self.sock_rep.send_json({"response": "ACK", "return_info": {"successor_pos_x_id": id, "successor_pos_x_address": address}})
+        print("salio comando get successor")
 
     def execute(self, client_requester):
+        print("entro execute")
         thread_verify = threading.Thread(target = self.verify, args =() )
-        thread_verify.start()        
+        print("abrio hilo")
+        thread_verify.start()
+        print("termino thread verify")        
         self.waiting_for_commands(client_requester)
 
     # calculate id using sha hash
@@ -153,20 +177,23 @@ class Node():
         return
 
     def thread_verify (self):
+        print("entro thread verify")
         countdown = time()
         rand = Random()
         rand.seed()
         requester = request(context = self.context)
+        print("instancio request en thread verify")
         while True:
             if abs (countdown - time( ) ) > self.waiting_time:
                 if self.predecessor_id != self.id:
-                    self.verify_active_nodes(sock_req = requester)                     
+                    self.command_verify_alive_nodes(sock_req = requester) 
+                    print("paso command verify alive nodes")                    
                 countdown = time()
 
     
     
     # Verificar si los nodos de la finger table siguen vivos
-    def verify_alive_nodes(self, sock_req : request):                        
+    def command_verify_alive_nodes(self, sock_req : request):                        
         # Guardamos el address del nodo anterior al que se va de la red 
         # Este es quien se encarga de reajustar la red
         predecessor_address = self.address
@@ -191,7 +218,7 @@ class Node():
     
     
     # Verificar si los nodos de la finger table siguen vivos
-    def it_lost_a_node(self, sock_req : request):
+    def command_it_lost_a_node(self, sock_req : request):
         # Cantidad de nodos muertos al final de mi finger table
         losses_node = 0
         self.finger_table.pop(0)
