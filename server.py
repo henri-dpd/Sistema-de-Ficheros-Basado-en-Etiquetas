@@ -31,6 +31,7 @@ class Node():
                          "get_params": self.command_get_params, 
                          "get_prop": self.command_get_prop,
                          "get_predecessor": self.command_get_predecessor,
+                         "get_successor": self. command_get_successor,
                          "find_successor": self.command_find_successor,
                          "find_predecessor": self.command_find_predecessor,
                          "calculate_id_in" : self.calculate_id_in,
@@ -90,6 +91,10 @@ class Node():
 
     def command_get_predecessor(self):
         self.sock_rep.send_json({"response": "ACK", "return_info": {"predecessor_id" : self.predecessor_id, "predecessor_address" : self.predecessor_address } } )
+
+    def command_get_succesor(self, x):
+        id, address = self.finger_table[x-1][0],self.finger_table[x-1][1]
+        self.sock_rep.send_json({"response": "ACK", "return_info": {"successor_pos_x_id": id, "successor_pos_x_address": address}})
 
 
     # calculate id using sha hash
