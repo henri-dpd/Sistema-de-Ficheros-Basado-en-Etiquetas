@@ -28,8 +28,8 @@ class Node():
         self.nodes_to_keep = 2
         self.predecessor_id = None
         self.predecessor_address = None
+        self.isPrincipal = False
     
-        #crear comandos
         self.commands = {"join": self.command_join, 
                          "verify_alive_node": self.command_verify_alive_nodes,
                          "it_lost_a_node": self.command_it_lost_a_node,
@@ -53,18 +53,17 @@ class Node():
         client_requester = request(context = self.context_sender)
         if introduction_node:
             recieved_json = client_requester.make_request(json_to_send = {"command_name" : "join",
-                                                                         "method_params" : {}, 
+                                                                         "method_params" : {"address_for_in" : self.address}, 
                                                                          "procedence_addr" : self.addr}, 
                                                           destination_addr = introduction_node)
             
             while recieved_json is client_requester.error_json:                
                 client_requester.action_for_error(introduction_node)
-                print("Enter address to retry ")
-                introduction_node = input()
+
                 print("Connecting now to ", (introduction_node))
                 
                 recieved_json = client_requester.make_request(json_to_send = {"command_name" : "join", 
-                                                                              "method_params" : {}, 
+                                                                              "method_params" : {"address_for_in" : self.address}, 
                                                                               "procedence_addr" : self.addr}, 
                                                               destination_addr = introduction_node)
                         
@@ -72,8 +71,6 @@ class Node():
             self.predeccesor_addr, self.predeccesor_id = self.addr, self.id
             
             self.isPrincipal = True
-
-        self.execute(client_requester)
 
 
     def waiting_for_commands(self, client_request):
@@ -100,8 +97,9 @@ class Node():
 
 
 
-    def command_join(self):
+    def command_join(self, node_address, sock_req : request):
         self.sock_rep.send_json({"response": "ACK_to_join", "return_info": {}})
+        self.calculate_id_in(node_address, self.id, None, None, 1, sock_req)
 
     def command_find_successor(self):
         print("entro comando find successor")
@@ -255,8 +253,8 @@ class Node():
         
         #Agrega el nodo a tu finger table
         self.finger_table.append((recv_json_successor[0],recv_json_successor[1]))
-
-    """         
+    
+    """      
     def get_objects_thread_funct(self, lock, socket):
         start_time = time.time()
         recived = False
@@ -308,9 +306,8 @@ class Node():
         if label in self.labels:
             ################
             # Enviar todos los archivos correspondientes al ip_request
-            pass 
+            pass
     """
-
 
     # Método para calcular el id que debe tener en el chord una pc que desea entrar
     def calculate_id_in(self, address_request, initial_id, best_id, best_address_to_in, best_score, sock_req : request):
