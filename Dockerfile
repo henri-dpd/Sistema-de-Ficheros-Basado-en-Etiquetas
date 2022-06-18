@@ -12,4 +12,4 @@ RUN pip install pyzmq
 EXPOSE 8080
 
 #Default running
-ENTRYPOINT ["python", "server.py"] 
+ENTRYPOINT ["python", "main.py"] 
