@@ -1,6 +1,8 @@
 import hashlib
+from random import Random
 import math
 import time
+from request import request
 import zmq
 import json
 import threading
@@ -23,6 +25,7 @@ class Node():
         self.finger_table_length = math.log2(self.size)
         self.finger_table = [None for i in range(self.finger_table_length)]
         self.waiting_time = 10
+        self.nodes_to_keep = 2
         self.predecessor_id = None
         self.predecessor_address = None
     
@@ -32,6 +35,7 @@ class Node():
                          "get_params": self.command_get_params, 
                          "get_prop": self.command_get_prop,
                          "get_predecessor": self.command_get_predecessor,
+                         "get_successor": self. command_get_successor,
                          "find_successor": self.command_find_successor,
                          "find_predecessor": self.command_find_predecessor,
                          "calculate_id_in" : self.calculate_id_in,
@@ -113,6 +117,10 @@ class Node():
     def command_get_predecessor(self):
         self.sock_rep.send_json({"response": "ACK", "return_info": {"predecessor_id" : self.predecessor_id, "predecessor_address" : self.predecessor_address } } )
 
+    def command_get_succesor(self, x):
+        id, address = self.finger_table[x-1][0],self.finger_table[x-1][1]
+        self.sock_rep.send_json({"response": "ACK", "return_info": {"successor_pos_x_id": id, "successor_pos_x_address": address}})
+
 
     # calculate id using sha hash
     def get_id(self, ip:int)-> str:
@@ -139,6 +147,83 @@ class Node():
         #-----------------------------------------------------------------#
         return
 
+    def thread_verify (self):
+        countdown = time()
+        rand = Random()
+        rand.seed()
+        requester = request(context = self.context)
+        while True:
+            if abs (countdown - time( ) ) > self.waiting_time:
+                if self.predecessor_id != self.id:
+                    self.verify_active_nodes(sock_req = requester)                     
+                countdown = time()
+
+    
+    
+    # Verificar si los nodos de la finger table siguen vivos
+    def verify_alive_nodes(self, sock_req : request):                        
+        # Guardamos el address del nodo anterior al que se va de la red 
+        # Este es quien se encarga de reajustar la red
+        predecessor_address = self.address
+        # Por cada nodo
+        for finger_table_node in range(min(self.finger_table, self.nodes_to_keep)):
+            # Verificar si el nodo esta vivo
+            recv_json_alive = sock_req.make_request(
+                json_to_send = {"command_name" : "are_you_alive", "method_params" : {}, "procedence_addr" : self.addr, "procedence_method": "verify_alive_nodes"},  
+                destination_addr = self.finger_table[finger_table_node][1])
+            # Si da error es porque nunca contestó y se asume que está muerto
+            if recv_json_alive is sock_req.error_json:
+                sock_req.action_for_error(self.finger_table[finger_table_node][1])
+                # Ejecutamos comando para estabilizar la red despues de perder al nodo
+                recv_json_alive = sock_req.make_request(
+                json_to_send = {"command_name" : "it_lost_a_node", "method_params" : {}, 
+                                "procedence_addr" : self.addr, "procedence_method": "verify_alive_nodes"},  
+                destination_addr = predecessor_address)
+                continue
+            # el predecesor ahora es el nodo de esta iteración quién acabamos de comprobar que esta vivo
+            predecessor_address = self.finger_table[finger_table_node][1]
+            
+    
+    
+    # Verificar si los nodos de la finger table siguen vivos
+    def it_lost_a_node(self, sock_req : request):
+        # Cantidad de nodos muertos al final de mi finger table
+        losses_node = 0
+        self.finger_table.pop(0)
+        recv_json_alive = sock_req.make_request(
+            json_to_send = {"command_name" : "are_you_alive", "method_params" : {}, "procedence_addr" : self.addr, "procedence_method": "verify_alive_nodes"},  
+            destination_addr = self.finger_table[len(self.finger_table-1)][1])
+        
+        # Mientras el ultimo nodo verificado este muerto... 
+        while recv_json_alive is sock_req.error_json:
+            # Si todos los nodos de la finger table estan muertos... levanta las manos
+            if len(self.finger_table-1-losses_node) < 0: 
+                return
+            losses_node += 1
+            recv_json_alive = sock_req.make_request(
+                json_to_send = {"command_name" : "are_you_alive", "method_params" : {}, "procedence_addr" : self.addr, "procedence_method": "verify_alive_nodes"},  
+                destination_addr = self.finger_table[len(self.finger_table-1-losses_node)][1]) 
+        
+        # Pregunta por el nodo a agregar a la finger table
+        recv_json_successor = sock_req.make_request(
+                json_to_send = {"command_name" : "find_successor_x", "method_params": {"succesor_x": losses_node}, "procedence_addr": self.addr, "procedence_method": "it_lost_a_node"}, 
+                destination_addr = self.finger_table[len(self.finger_table-1-losses_node)][1])
+        
+        # Crea la finger table para tu predecesor
+        new_finger_table = self.finger_table.copy()
+        new_finger_table.insert(0, (self.id, self.address))
+        
+        # Arregla
+        recv_json_update_finger_table = sock_req.make_request(
+                json_to_send = {"command_name" : "replace_finger_table_consecutive", 
+                                "method_params": {"finger_table": new_finger_table,
+                                                  "iterations": len(self.finger_table)}, 
+                                "procedence_addr": self.addr, "procedence_method": "it_lost_a_node"}, 
+                destination_addr = self.antecessor_address)
+        
+        #Agrega el nodo a tu finger table
+        self.finger_table.append((recv_json_successor[0],recv_json_successor[1]))
+        
     #subscriter to broadcast
     def broadcast_thread_funct(self,lock,socket)-> None:
         while True:
