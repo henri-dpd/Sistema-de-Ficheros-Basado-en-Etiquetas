@@ -352,7 +352,7 @@ class Node():
 
     # Método para calcular el id que debe tener en el chord una pc que desea entrar
     def calculate_id_in(self, address_request, initial_id, best_id, best_address_to_in, best_score, sock_req : request):
-
+        print("Buscando la mejor posición para el nuevo nodo...")
         #La idea es calcular el mayor espaciamiento entre dos nodos en el chord
         # best_score inicia en 1 para que no se elijan nodos consecutivos
 
@@ -454,6 +454,7 @@ class Node():
 
     # Método para que un nodo entre a otro como su sucesor en el chord
     def get_in_new_node(self, address_to_get_in, id_to_place, sock_req : request):
+        print("Ya es posible entrar al nuevo nodo")
         # Primero le damos nuestra finger table para que actualice la suya
         recv_json = sock_req.make_request(json_to_send = {"command_name" : "get_in_to_chord_succefully", 
                                                           "method_params" : {"new_id" : id_to_place,
@@ -490,6 +491,7 @@ class Node():
                                              destination_addr = self.predecessor_address)
 
     def get_in_to_chord_succefully(self, new_id, finger_table, predecessor_address, predecessor_id):
+        print("Entré al chord satisfactoriamente")
         self.id = new_id
         self.finger_table = finger_table
         self.predeccesor_addr = predecessor_address
@@ -497,12 +499,14 @@ class Node():
 
 
     def replace_predeccessor(self, new_predecessor_address, new_predecessor_id, sock_req : request):
+        print("Voy a reemplazar a mi predecesor porque algo pasó")
         self.antecessor_id = new_predecessor_id
         self.predecessor_address = new_predecessor_address
 
 
     # Método para estabilizar las finger table de los nodos anteriores
     def replace_finger_table_consecutive(self, finger_table, iterations, sock_req: request):
+        print("Voy a estabilizar mi finger table porque algo pasó")
         for i in range(len(finger_table)):
             if (self.id, self.address) == finger_table[i]:
                 del(finger_table[i])
