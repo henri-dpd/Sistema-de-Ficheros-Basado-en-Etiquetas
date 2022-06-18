@@ -52,4 +52,6 @@ class request:
 
         return self.error
         
+    def action_for_error(self, destination_addr):
         
+        print('Remember: %s is dead' %destination_addr)    
