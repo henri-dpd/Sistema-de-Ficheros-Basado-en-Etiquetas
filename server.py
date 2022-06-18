@@ -4,6 +4,7 @@ import time
 import zmq
 import json
 import threading
+from request import request
 
 PORT1 = '8082'
 PORT2 = '8083'
@@ -42,7 +43,28 @@ class Node():
 
         print("Started node ", (self.id, self.addr))
 
-        #Falta introducir nodo a la red??????????????????????????????????????????????????
+        client_requester = request(context = self.context_sender)
+        if introduction_node:
+            recieved_json = client_requester.make_request(json_to_send = {"command_name" : "join",
+                                                                         "method_params" : {}, 
+                                                                         "procedence_addr" : self.addr}, 
+                                                          destination_addr = introduction_node)
+            
+            while recieved_json is client_requester.error_json:                
+                client_requester.action_for_error(introduction_node)
+                print("Enter address to retry ")
+                introduction_node = input()
+                print("Connecting now to ", (introduction_node))
+                
+                recieved_json = client_requester.make_request(json_to_send = {"command_name" : "join", 
+                                                                              "method_params" : {}, 
+                                                                              "procedence_addr" : self.addr}, 
+                                                              destination_addr = introduction_node)
+                        
+        else:
+            self.predeccesor_addr, self.predeccesor_id = self.addr, self.id
+            
+            self.isPrincipal = True
 
 
     def waiting_for_commands(self, client_request):
@@ -297,6 +319,9 @@ class Node():
             # Enviar todos los archivos correspondientes al ip_request
             pass
 
+
+    def I_wanna_get_in(self):
+        pass
 
     # Método para calcular el id que debe tener en el chord una pc que desea entrar
     def calculate_id_in(self, address_request, initial_id, best_id, best_address_to_in, best_score, sock_req : request):
