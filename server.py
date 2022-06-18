@@ -22,12 +22,14 @@ class Node():
         self.start = lambda i : (self.id + 2**(i)) % 2**self.size
         self.finger_table = [None for i in range(self.size)]
         self.waiting_time = 10
-        self.predecessor = None
+        self.predecessor_id = None
+        self.predecessor_address = None
     
         #crear comandos???????????????????????????????????????????????????????????????????
         self.commands = {"join": self.command_join, "find_successor": self.command_find_successor,
-                         "find_predecessor": self.command_find_predecessor}
-        self.commands_request = {}
+                         "find_predecessor": self.command_find_predecessor, "are_you_alive": self.command_are_you_alive,
+                         "get_params": self.command_get_params, "get_prop": self.command_get_prop,
+                         "get_predecessor": self.command_get_predecessor }
 
         if self.debug_print: print("Started node ", (self.id, self.addr))
 
@@ -59,16 +61,26 @@ class Node():
         self.sock_rep.send_json({"response": "ACK_to_join", "return_info": {}})
 
     def command_find_successor(self):
-        id_ip = (self.finger_table[0][0],self.finger_table[0][1])
-        self.sock_rep.send_json({"response": "ACK", "return_info": id_ip})
+        id, address = self.finger_table[0][0],self.finger_table[0][1]
+        self.sock_rep.send_json({"response": "ACK", "return_info": {"successor_id": id, "successor_address": address}})
 
     def command_find_predecessor(self):
-        id, ip = self.predecessor
-        self.sock_rep.send_json({"response": "ACK", "return_info": {"predecessor_id": id, "predecessor_ip": ip}, "procedence_address": self.address } )
+        self.sock_rep.send_json({"response": "ACK", "return_info": {"predecessor_id": self.predecessor_id, "predecessor_address": self.predecessor_address}, "procedence_address": self.address } )
 
+    def command_are_you_alive(self):
+        self.sock_rep.send_json({"response": "ACK", "procedence_addr": self.address})
 
+    def command_get_params(self):        
+        self.sock_rep.send_json({"response": "ACK", "return_info": {"finger_table" : self.finger_table, "predecessor_id": self.predecessor_id, "predecessor_address": self.predecessor_address, "id": self.id, "address": self.address } })
 
+    def command_get_prop(self, prop_name):
+        if prop_name == "start_indexes":
+            self.sock_rep.send_json({'response': "ACK", "return_info" : [self.start(i) for i in range(self.size)] })    
 
+        self.sock_rep.send_json({'response': 'ACK', "return_info": self.__dict__[prop_name] })
+
+    def command_get_predecessor(self):
+        self.sock_rep.send_json({"response": "ACK", "return_info": {"predecessor_id" : self.predecessor_id, "predecessor_address" : self.predecessor_address } } )
 
 
     # calculate id using sha hash
