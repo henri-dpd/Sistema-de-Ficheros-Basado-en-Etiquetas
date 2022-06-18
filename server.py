@@ -77,7 +77,7 @@ class Node():
         
         print("Entro a waiting for commands")
         self.sock_rep = self.context.socket(zmq.REP)
-        self.sock_rep.bind("tcp://" + self.addr)    
+        self.sock_rep.bind("tcp://" + self.address)    
                 
         while True:
 
