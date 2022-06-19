@@ -2,7 +2,7 @@ import zmq
 
 
 class request:
-    def __init__(self, context, error = "ERROR",  request_timeout = 5000, request_retries = 3):
+    def __init__(self, context, error = "ERROR",  request_timeout = 1000, request_retries = 2):
         
         self.request_timeout = request_timeout
         self.request_retries = request_retries
@@ -21,7 +21,7 @@ class request:
 
         for i in range(self.request_retries, 0, -1):
                         
-            self.socket_request.connect("tcp://" + destination_address)  
+            self.socket_request.connect("tcp://" + str(destination_address))  
             print("Sending message %s to %s" %(json_to_send, destination_address))
             
             self.socket_request.send_json(json_to_send)            
@@ -33,7 +33,7 @@ class request:
                 print("Recieved %s from %s" %(recv, destination_address))
                 
                 self.socket_request.disconnect("tcp://" + destination_address) 
-                if retried: print("I did it %s, to %s " %(json_to_send, destination_address))
+                # if retried: print("I did it %s, to %s " %(json_to_send, destination_address))
                 return recv
 
             

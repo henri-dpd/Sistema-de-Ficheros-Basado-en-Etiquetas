@@ -23,6 +23,6 @@ if __name__ == "__main__":
     if args.addr_known and not matcher.fullmatch(args.addr_known.split()[0]):
         parser.error(error_message %("addr_known", args.addr_known))
 
-
+    
     node = Node(address = args.addr_ip, introduction_node = args.addr_known)
     
