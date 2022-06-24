@@ -16,8 +16,13 @@ class request:
             return {"response": "ACK", "procedence_address": json_to_send['procedence_address'], "return_info": {asked_property: requester_object.__dict__[asked_property] for asked_property in asked_properties } }
         if method_for_wrap and destination_address == json_to_send['procedence_address']:
                          
-            return {"response": "ACK", "procedence_address": json_to_send['procedence_address'], "return_info": requester_object.__class__.__dict__ [method_for_wrap] (requester_object, **json_to_send['method_params'])}
+            if json_to_send['command_name'] == 'closest_predecessor_fing': 
+                json_to_send['method_params'].update({"sock_req" : self})                
+            return {"response": "ACK", 
+                    "procedence_address": json_to_send['procedence_address'], 
+                    "return_info": requester_object.__class__.__dict__ [method_for_wrap] (requester_object, **json_to_send['method_params'])}
 
+        
         for i in range(self.request_retries, 0, -1):
                         
             self.socket_request.connect("tcp://" + str(destination_address))  

@@ -6,6 +6,7 @@ from random import Random
 import math
 import re
 from time import sleep
+import time
 from request import request
 import zmq
 import threading
@@ -47,10 +48,15 @@ class Node():
                          "get_in_to_chord_succefully" : self.get_in_to_chord_succefully,
                          "recv_file" : self.command_recv_file,
                          "send_file" : self.command_send_file,
+                         "closest_predecessor_fing" : self.command_closest_predecessor_fing,
+                         "get_k_list" : self.command_get_k_list,
+                         "rect" : self.command_rect,
+                         "stabilize" : self.command_stabilize
                          }
 
-        self.commands_request = { "verify_alive_node", "it_lost_a_node", "calculate_id_in", "join",
-                                  "get_in_new_node", "replace_finger_table_consecutive", "nodes_losses_fix_chord"}
+        self.commands_request = {"verify_alive_node", "it_lost_a_node", "calculate_id_in", "get_in_new_node", 
+                                 "replace_finger_table_consecutive", "nodes_losses_fix_chord","rect", "stabilize",
+                                 "find_successor", "find_predecessor"}
 
         print("Started node ", (self.id, self.address))
         client_requester = request(context = self.context)
@@ -98,13 +104,191 @@ class Node():
     def start(self, i):
         return (self.id + 2**(i)) % 2**self.size
 
-
-
-
-
-
-    def waiting_for_commands(self, client_request):
+    def execute_join(self, introduction_node, introduction_node_id, id_to_found_pred, sock_req):
+        recv_json = sock_req.make_request(json_to_send = {"command_name" : "find_predecessor",
+                                                          "method_params" : {"id" : id_to_found_pred},
+                                                          "procedence_address" : self.address},
+                                          requester_object = self,
+                                          method_for_wrap = "find_predecessor",
+                                          destination_id = introduction_node_id,
+                                          destination_address = introduction_node)
+        if recv_json is sock_req.error_json:
+            return False
         
+        self.predeccesor_id, self.predeccesor_address = recv_json['return_info']['predecessor_id'], recv_json['return_info']['predecessor_address']
+        recv_json = sock_req.make_request(json_to_send = {"command_name" : "get_k_list", 
+                                                          "method_params" : {}, 
+                                                          "procedence_address" : self.address}, 
+                                          requester_object = self, 
+                                          asked_properties = ("k_list",), 
+                                          destination_id = recv_json['return_info']['predecessor_id'], 
+                                          destination_address = recv_json['return_info']['predecessor_address'] )         
+        if recv_json is sock_req.error_json:
+            return False
+        self.k_list = recv_json['return_info']['k_list']
+        return True
+
+    def command_find_predecessor(self, sock_req):
+        print("entro comando find predcessor")
+        predecessor_id, predecessor_address = self.find_predecesor(id, sock_req)
+
+        self.sock_rep.send_json({"response": "ACK", "return_info": {"predecessor_id": predecessor_id, "predecessor_address": predecessor_address}, "procedence_addr": self.address } )
+        
+        
+    def find_predecessor(self, id, sock_req):
+        current_id = self.id
+        current_k_list_id = self.k_list[0][0]
+        self.finger_table[0] = self.k_list[0]
+        current_address = self.address  
+        while not self.between(id, interval = (current_id, current_k_list_id)) and current_k_list_id != id :
+            recv_json_closest_predecessor = sock_req.make_request(json_to_send = {"command_name" : "closest_predecessor_fing",
+                                                                                  "method_params" : {"id": id}, 
+                                                                                  "procedence_addr" : self.address, 
+                                                                                  "procedence_method": "find_predecesor"}, 
+                                                                  method_for_wrap = 'closest_predecessor_fing', 
+                                                                  requester_object = self, 
+                                                                  destination_id = current_id, 
+                                                                  destination_address = current_address)
+            if recv_json_closest_predecessor is sock_req.error_json : 
+                return None
+            recv_json_k_list = sock_req.make_request(json_to_send = {"command_name" : "get_k_list", 
+                                                                   "method_params" : {}, 
+                                                                   "procedence_addr" : self.address, 
+                                                                   "procedence_method" : "find_predecesor" }, 
+                                                   requester_object = self, 
+                                                   asked_properties = ("k_list", ), 
+                                                   destination_id = recv_json_closest_predecessor['return_info'][0], 
+                                                   destination_address = recv_json_closest_predecessor['return_info'][1] )
+            if recv_json_k_list is sock_req.error_json:
+                return None
+            current_id, current_address = recv_json_closest_predecessor['return_info'][0], recv_json_closest_predecessor['return_info'][1]
+            current_k_list_id = recv_json_k_list['return_info']['k_list'][0][0]               
+        
+        return current_id, current_address
+
+    def command_closest_predecessor_fing (self, id, sock_req):        
+        closest_id, closest_address = self.closest_pred_fing(id, sock_req)
+        self.sock_rep.send_json({"response" : "ACK", "return_info" : (closest_id, closest_address), "procedence": self.address})
+
+
+    def closest_predecessor_fing(self, id, sock_req):
+        for i in range(self.size-1, -1, -1):            
+            if self.finger_table[i] is None : continue 
+            if self.between(self.finger_table[i][0], (self.id, id) ) :
+                return self.finger_table[i]                
+        return (self.id, self.address)
+
+    def between(self, id, interval):
+        if interval[0] < interval[1]:
+            return id > interval[0] and id < interval[1] 
+        return id > interval[0] or id < interval[1]
+
+    def command_get_k_list(self):
+        self.sock_rep.send_json( {"response": "ACK", "return_info": {"k_list" : self.k_list} } )
+        
+    def execute(self, client_requester):
+        print("entro execute")
+        thread_verify = threading.Thread(target = self.thread_verify, args =() )
+        thread_verify.start()        
+        self.waiting_for_commands(client_requester)
+        
+    def thread_verify(self):
+        countdown = time()
+        rand = Random()
+        rand.seed()
+        requester = request(context = self.context)
+        choices = [i for i in range(self.size)]
+        while True:
+            if abs (countdown - time( ) ) > self.waiting_time:
+                if self.predecessor_id != self.id:
+                    self.stabilize(sock_req = requester)
+                    if requester.make_request(json_to_send = {"command_name" : "rect", 
+                                                              "method_params" : { "predecessor_id": self.id, 
+                                                                                 "predecessor_address" : self.address }, 
+                                                              "procedence_address" : self.address, 
+                                                              "procedence_method": "thread_verify", 
+                                                              "time": time()}, 
+                                              destination_id = self.k_list[0][0], 
+                                              destination_addr = self.k_list[0][1]) is requester.error_json:
+                        requester.action_for_error(self.k_list[0][1])
+
+                    index = rand.choice( choices )                    
+                    self.finger_table[ index ] = self.find_successor(self.start(index), sock_req = requester)                    
+                countdown = time()
+
+    def command_stabilize(self, sock_req : request):
+                                       
+        recv_json_predecessor = sock_req.make_request(json_to_send = {"command_name" : "get_predecessor", 
+                                                               "method_params" : {}, 
+                                                               "procedence_address" : self.address, 
+                                                               "procedence_method": "stabilize"}, 
+                                               requester_object = self, 
+                                               asked_properties = ('predecessor_id', 'predecessor_address'), 
+                                               destination_id = self.k_list[0][0], 
+                                               destination_address = self.k_list[0][1])
+        if recv_json_predecessor is sock_req.error_json:
+            sock_req.action_for_error(self.succ_list[0][1])
+            self.k_list.pop(0)
+            self.k_list += [(self.id, self.address)]
+            return
+
+        recv_json_k_list = sock_req.make_request(json_to_send = {'command_name' : "get_k_list", 
+                                                                 'method_params' : {}, 
+                                                                 'procedence_address' : self.address, 
+                                                                 "procedence_method": "stabilize"}, 
+                                                 requester_object = self, 
+                                                 asked_properties = ("k_list",), 
+                                                 destination_id = self.k_list[0][0], 
+                                                 destination_address = self.k_list[0][1])
+        if recv_json_k_list is sock_req.error_json: return 
+
+        self.succ_list = [self.succ_list[0]] + recv_json_k_list['return_info']["k_list"][:-1]
+
+        if self.between(recv_json_predecessor['return_info']['predeccesor_id'], interval = (self.id, self.k_list[0][0]) ):
+            
+            recv_json_pred_k_list = sock_req.make_request( json_to_send = {"command_name" : "get_k_list", 
+                                                                              "method_params" : {}, 
+                                                                              "procedence_address" : self.address, 
+                                                                              "procedence_method":  "stabilize"}, 
+                                                             requester_object = self, 
+                                                             asked_properties = ('k_list',), 
+                                                             destination_id = recv_json_predecessor['return_info'][ 'predecessor_id'], 
+                                                             destination_address = recv_json_predecessor['return_info'][ 'predecessor_address'])
+            if not recv_json_pred_k_list is sock_req.error_json:
+                
+                #If it's true that self has a new succesor and this new sucstabcesor is alive, then self has to actualize its succ_list    
+                self.k_list = [[recv_json_predecessor['return_info']['predecessor_id'], 
+                                recv_json_predecessor['return_info']['predecessor_address']]] + recv_json_pred_k_list['return_info']['k_list'][:-1]                                       
+            else:
+                self.verbose_option: sock_req.action_for_error(recv_json_predecessor['return_info'][ 'predeccesor_address'])
+
+    def command_rect(self, predecessor_id, predecessor_address, sock_req):
+        
+        if self.between(predecessor_id, interval = (self.predecessor_id, self.id)) or self.id == self.predecessor_id:
+            
+            if self.predecessor_id == self.id: 
+
+                self.k_list[0] = (predecessor_id, predecessor_address)                
+            self.predecessor_id, self.predecessor_address = predecessor_id, predecessor_address
+
+        else:
+                        
+            recv_json_alive = sock_req.make_request(json_to_send = {"command_name" : "are_you_alive", 
+                                                                    "method_params" : {}, 
+                                                                    "procedence_address" : self.address, 
+                                                                    "procedence_method": "rect"}, 
+                                                    destination_id = self.predecessor_id, 
+                                                    destination_address = self.predecessor_address)
+            
+            if recv_json_alive is sock_req.error_json:
+                sock_req.action_for_error(self.predecessor_address)   
+                self.predecessor_id, self.predecessor_address = predecessor_id, predecessor_address             
+                sock_req.action_for_error(self.predecessor_address)
+        
+        self.sock_rep.send_json( { "response": "ACK" } )
+
+
+    def waiting_for_commands(self, client_request):        
         self.sock_rep = self.context.socket(zmq.REP)
         self.sock_rep.bind("tcp://" + self.address)    
                 
@@ -124,6 +308,63 @@ class Node():
                     self.commands[buffer["command_name"]](**buffer["method_params"])
                     
         self.sock_rep.close()      
+        
+    def command_find_successor(self, id, sock_req):
+        info = self.find_successor(id, sock_req)
+        self.sock_rep.send_json({"response": "ACK", "return_info": info})
+        pass
+
+
+    def find_successor(self, id, sock_req):
+        tuple_info = self.find_predecessor(id, sock_req)
+        if tuple_info:
+            destination_id, destination_address = tuple_info            
+            recv_json = sock_req.make_request(json_to_send = {"command_name" : "get_k_list", 
+                                                              "method_params": {}, 
+                                                              "procedence_address": self.address, 
+                                                              "procedence_method": "find_successor"}, 
+                                              requester_object= self, 
+                                              asked_properties = ('k_list', ), 
+                                              destination_id = destination_id, 
+                                              destination_address = destination_address ) 
+            if recv_json is sock_req.error_json: return None
+            return recv_json['return_info']['k_list'][0]
+        return None
+        
+    def command_get_params(self):  
+        print("entro comando get params")      
+        self.sock_rep.send_json({"response": "ACK", 
+                                 "return_info": {"finger_table" : self.finger_table, 
+                                                 "predecessor_address" : self.predecessor_address, 
+                                                 "predecessor_id" : self.predecessor_id, 
+                                                 "k_list" : self.k_list, 
+                                                 "id": self.id, 
+                                                 "address": self.address } })
+
+    def command_get_prop(self, prop_name):
+        print("entro comando get prop")
+        if prop_name == "start_indexes":
+            self.sock_rep.send_json({'response': "ACK", 
+                                     "return_info" : [self.start(i) for i in range(self.size)] })    
+
+        self.sock_rep.send_json({'response': 'ACK', "return_info": self.__dict__[prop_name] })
+        
+    def command_get_predecessor(self):
+        print("entro comando get predecessor")
+        self.sock_rep.send_json({"response": "ACK", 
+                                 "return_info": {"predecessor_id" : self.predecessor_id, 
+                                                 "predecessor_address" : self.predecessor_address } } )
+        
+    
+    def command_are_you_alive(self):
+        print("entro comando are you alive")
+        self.sock_rep.send_json({"response": "ACK", "procedence_addr": self.address})
+    
+    
+    
+    
+    
+    
 
     def command_send_file(self, path):
         # Verify that the file is available
@@ -145,6 +386,7 @@ class Node():
             else:
                 # Finish it off
                 self.sock_rep.send(stream)
+        
         
 
     def command_recv_file(self, path, destination_address):
@@ -180,38 +422,7 @@ class Node():
               
 
 
-    def command_join(self, node_address, sock_req : request):
-        print("Join command")
-        self.sock_rep.send_json({"response": "ACK_to_join", "return_info": {}})
-        self.calculate_id_in(node_address, self.id, None, None, 1, True, sock_req)
 
-    def command_find_successor(self):
-        print("entro comando find successor")
-        id, address = self.finger_table[0][0],self.finger_table[0][1]
-        self.sock_rep.send_json({"response": "ACK", "return_info": {"successor_id": id, "successor_address": address}})
-
-    def command_find_predecessor(self):
-        print("entro comando find predcessor")
-        self.sock_rep.send_json({"response": "ACK", "return_info": {"predecessor_id": self.predecessor_id, "predecessor_address": self.predecessor_address}, "procedence_address": self.address } )
-
-    def command_are_you_alive(self):
-        print("entro comando are you alive")
-        self.sock_rep.send_json({"response": "ACK", "procedence_addr": self.address})
-
-    def command_get_params(self):  
-        print("entro comando get params")      
-        self.sock_rep.send_json({"response": "ACK", "return_info": {"finger_table" : self.finger_table, "predecessor_id": self.predecessor_id, "predecessor_address": self.predecessor_address, "id": self.id, "address": self.address } })
-
-    def command_get_prop(self, prop_name):
-        print("entro comando get prop")
-        if prop_name == "start_indexes":
-            self.sock_rep.send_json({'response': "ACK", "return_info" : [self.start(i) for i in range(self.size)] })    
-
-        self.sock_rep.send_json({'response': 'ACK', "return_info": self.__dict__[prop_name] })
-
-    def command_get_predecessor(self):
-        print("entro comando get predecessor")
-        self.sock_rep.send_json({"response": "ACK", "return_info": {"predecessor_id" : self.predecessor_id, "predecessor_address" : self.predecessor_address } } )
         
     def command_update_predecessor(self, predecessor_id, predecessor_address):
         print("entro comando get predecessor")
@@ -224,14 +435,10 @@ class Node():
         id, address = self.finger_table[x-1][0],self.finger_table[x-1][1]
         self.sock_rep.send_json({"response": "ACK", "return_info": {"successor_pos_x_id": id, "successor_pos_x_address": address}})
 
-    def execute(self, client_requester):
-        print("entro execute")
-        thread_verify = threading.Thread(target = self.thread_verify, args =() )
-        thread_verify.start()        
-        self.waiting_for_commands(client_requester)
+    
     
 
-    def thread_verify (self):
+    """ def thread_verify (self):
         print("entro thread verify")
         rand = Random()
         requester = request(context = self.context)
@@ -241,10 +448,10 @@ class Node():
             sleep(to_sleep)
             if self.predecessor_id != self.id:
                 self.verify_alive_nodes(sock_req = requester) 
-                print("paso command verify alive nodes")              
+                print("paso command verify alive nodes") """              
 
              
-    # Verificar si los nodos de la finger table siguen vivos
+    """ # Verificar si los nodos de la finger table siguen vivos
     def verify_alive_nodes(self, sock_req : request):
         if len(self.finger_table) == 0:
             self.sock_rep.send_json({"response": "ACK_verify_alive_nodes", "return_info": {}})
@@ -324,7 +531,7 @@ class Node():
         if recv_json_update_predecessor is sock_req.error:
                 sock_req.action_for_error(self.predecessor_address)
         self.sock_rep.send_json({"response": "ACK_to_fix_chord", "return_info": {}})
-    
+     """
     """      
     def get_objects_thread_funct(self, lock, socket):
         start_time = time.time()
@@ -379,7 +586,7 @@ class Node():
             # Enviar todos los archivos correspondientes al ip_request
             pass
     """
-
+    """ 
     # Método para calcular el id que debe tener en el chord una pc que desea entrar
     def calculate_id_in(self, address_request, initial_id, best_id, best_address_to_in, best_score, auto_activation, sock_req : request):
         
@@ -596,4 +803,4 @@ class Node():
                                                                                     "iterations": iterations - 1}},
                                             requester_object = self,
                                             destination_address = self.predecessor_address)
-        self.sock_rep.send_json({"response": "ACK_to_replace_finger_table", "return_info": {}})
+        self.sock_rep.send_json({"response": "ACK_to_replace_finger_table", "return_info": {}}) """
