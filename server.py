@@ -1,9 +1,11 @@
 
+from functools import reduce
+import hashlib
+import os
 from random import Random
 import math
 import re
-from time import time, sleep
-
+from time import sleep
 from request import request
 import zmq
 import threading
@@ -17,16 +19,16 @@ PORT4 = '8085'
 class Node():
     def __init__(self, address, introduction_node = None):
         self.address = address
-        self.id = 0
+        self.id = self.get_node_hash(address)
         self.context = zmq.Context()
         self.size = 64
+        self.k = 3
+        self.k_successor = [(self.id, self.address) for _ in range(self.k)]
         self.finger_table_length = int(math.log2(self.size))
-        self.finger_table = []
-        self.waiting_time = [10,15]
-        self.nodes_to_keep = 2
-        self.predecessor_id = None
-        self.predecessor_address = None
-    
+        self.finger_table = [None for _ in range(self.size)]
+        self.waiting_time = 10
+        self.is_leader = False
+        
         self.commands = {"join": self.command_join, 
                          "verify_alive_node": self.verify_alive_nodes,
                          "nodes_losses_fix_chord": self.nodes_losses_fix_chord,
@@ -43,36 +45,62 @@ class Node():
                          "replace_predeccessor" : self.replace_predeccessor,
                          "replace_finger_table_consecutive" : self.replace_finger_table_consecutive,
                          "get_in_to_chord_succefully" : self.get_in_to_chord_succefully,
+                         "recv_file" : self.command_recv_file,
+                         "send_file" : self.command_send_file,
                          }
 
-        self.commands_request = { "verify_alive_node", "it_lost_a_node", "calculate_id_in", "join", 
+        self.commands_request = { "verify_alive_node", "it_lost_a_node", "calculate_id_in", "join",
                                   "get_in_new_node", "replace_finger_table_consecutive", "nodes_losses_fix_chord"}
 
         print("Started node ", (self.id, self.address))
-
         client_requester = request(context = self.context)
         if introduction_node:
+            introduction_node_id = self.get_node_hash(introduction_node)
             recieved_json = client_requester.make_request(json_to_send = {"command_name" : "join",
-                                                                         "method_params" : {"node_address" : self.address}, 
+                                                                         "method_params" : {}, 
                                                                          "procedence_addr" : self.address}, 
-                                                          destination_address = introduction_node)
+                                                          destination_address = introduction_node,
+                                                          destination_id = introduction_node_id)
             
             while recieved_json is client_requester.error:                
                 client_requester.action_for_error(introduction_node)
-
+                print("Enter address to retry ")
+                introduction_node = input()
                 print("Connecting now to ", (introduction_node))
-                
-                recieved_json = client_requester.make_request(json_to_send = {"command_name" : "join", 
-                                                                              "method_params" : {"node_address" : self.address}, 
-                                                                              "procedence_address" : self.address}, 
-                                                              destination_address = introduction_node)
-                        
+                introduction_node_id = self.get_node_hash(introduction_node)
+            recieved_json = client_requester.make_request(json_to_send = {"command_name" : "join",
+                                                                         "method_params" : {}, 
+                                                                         "procedence_addr" : self.address}, 
+                                                          destination_address = introduction_node,
+                                                          destination_id = introduction_node_id)
+            while not self.execute_join(introduction_node, introduction_node_id, self.start(0), client_requester):
+                client_requester.action_for_error(introduction_node)
+                print("Enter address to retry ")
+                introduction_node = input()
+                introduction_node_id = self.get_node_hash(introduction_node)
+                print("Connecting now to ", (introduction_node_id, introduction_node))                
+            recieved_json = client_requester.make_request(json_to_send = {"command_name" : "join",
+                                                                         "method_params" : {}, 
+                                                                         "procedence_addr" : self.address}, 
+                                                          destination_address = introduction_node,
+                                                          destination_id = introduction_node_id)
         else:
             self.predecessor_address, self.predecessor_id = self.address, self.id
-        
+            self.is_leader = True
         self.execute(client_requester)
         
-        
+    def get_node_hash(self, address):
+        summ = ''
+        for x in address.split(":")[0].split(".") + [address.split(":")[1]]:
+            summ += x
+        return int(hashlib.sha1(bytes(summ, 'utf-8') ).hexdigest(),16)
+
+    def start(self, i):
+        return (self.id + 2**(i)) % 2**self.size
+
+
+
+
 
 
     def waiting_for_commands(self, client_request):
@@ -97,6 +125,59 @@ class Node():
                     
         self.sock_rep.close()      
 
+    def command_send_file(self, path):
+        # Verify that the file is available
+        if not os.path.isfile("data/" + path):
+            self.sock_rep.send('')
+            return
+        print("Existe el archivo")
+        # Open the file for reading
+        fn = open("data/" + path, 'rb')
+        stream = True
+        print("Enviando data")
+        # Start reading in the file
+        while stream:
+            # Read the file bit by bit
+            stream = fn.read(128)
+            if stream:
+                # If the stream has more to send then send more
+                self.sock_rep.send(stream, zmq.SNDMORE)
+            else:
+                # Finish it off
+                self.sock_rep.send(stream)
+        
+
+    def command_recv_file(self, path, destination_address):
+        self.sock_rep.send_json({})   
+        
+        # Open up the file we are going to write to
+        dest = open("data/" + os.path.basename(path), 'wb')
+        socket_request = self.context.socket(zmq.REQ)
+        for i in range(3):
+            socket_request.connect('tcp://' + destination_address)
+            print('tcp://' + destination_address)
+            # send the desired file to the server
+            socket_request.send(path.encode())
+            print("hola again")
+
+            if socket_request.poll(1000):
+                while True:
+                    print("oinmp")
+                    # Start grabing data
+                    data = socket_request.recv()
+                    # Write the chunk to the file
+                    dest.write(data)
+                    if not socket_request.getsockopt(zmq.RCVMORE):
+                        # If there is not more data to send, then break
+                        break
+                socket_request.disconnect("tcp://" + str(destination_address)) 
+                return
+            socket_request.disconnect("tcp://" + destination_address)
+            socket_request.setsockopt(zmq.LINGER, 0)
+            socket_request.close()
+            
+            socket_request = self.context.socket(zmq.REQ)
+              
 
 
     def command_join(self, node_address, sock_req : request):

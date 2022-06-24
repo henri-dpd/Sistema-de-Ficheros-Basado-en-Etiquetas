@@ -17,7 +17,6 @@ class request:
         if method_for_wrap and destination_address == json_to_send['procedence_address']:
                          
             return {"response": "ACK", "procedence_address": json_to_send['procedence_address'], "return_info": requester_object.__class__.__dict__ [method_for_wrap] (requester_object, **json_to_send['method_params'])}
-        retried = False
 
         for i in range(self.request_retries, 0, -1):
                         
@@ -33,7 +32,6 @@ class request:
                 print("Recieved %s from %s" %(recv, destination_address))
                 
                 self.socket_request.disconnect("tcp://" + destination_address) 
-                # if retried: print("I did it %s, to %s " %(json_to_send, destination_address))
                 return recv
 
             
@@ -42,7 +40,6 @@ class request:
             print("I'm trying to send %s to %s " %(json_to_send, destination_address))
 
             self.socket_request.disconnect("tcp://" + destination_address)
-            retried = True
             self.socket_request.setsockopt(zmq.LINGER, 0)
             self.socket_request.close()
             
