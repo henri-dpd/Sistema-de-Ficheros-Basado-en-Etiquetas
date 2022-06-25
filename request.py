@@ -2,7 +2,7 @@ import zmq
 
 
 class request:
-    def __init__(self, context, error = "ERROR",  request_timeout = 1000, request_retries = 2):
+    def __init__(self, context, error = "ERROR",  request_timeout = 10000, request_retries = 2):
         
         self.request_timeout = request_timeout
         self.request_retries = request_retries
@@ -10,12 +10,13 @@ class request:
         self.error = error            
         self.socket_request = self.context.socket(zmq.REQ)
 
-    def make_request(self, json_to_send, destination_address, requester_object = None, asked_properties = None, method_for_wrap = None):        
+    def make_request(self, json_to_send, destination_id, destination_address, requester_object = None, asked_properties = None, method_for_wrap = None):        
         if asked_properties and destination_address == json_to_send['procedence_address']:
-            
-            return {"response": "ACK", "procedence_address": json_to_send['procedence_address'], "return_info": {asked_property: requester_object.__dict__[asked_property] for asked_property in asked_properties } }
+            print("asked properties")
+            return {"response": "ACK", "procedence_address": json_to_send['procedence_address'], 
+                    "return_info": {asked_property: requester_object.__dict__[asked_property] for asked_property in asked_properties } }
         if method_for_wrap and destination_address == json_to_send['procedence_address']:
-                         
+            print("method_for_wrap")
             if json_to_send['command_name'] == 'closest_predecessor_fing': 
                 json_to_send['method_params'].update({"sock_req" : self})                
             return {"response": "ACK", 
@@ -53,6 +54,6 @@ class request:
 
         return self.error
         
-    def action_for_error(self, destination_addr):
+    def action_for_error(self, destination_address):
         
-        print('Remember: %s is dead' %destination_addr)    
+        print('Remember: %s is dead' %destination_address)    
