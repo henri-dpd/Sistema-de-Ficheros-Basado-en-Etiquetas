@@ -1,6 +1,9 @@
 import argparse
+from ast import arg
+from multiprocessing.connection import Client
 import re
 from socket import gethostbyname, gethostname
+from client import client
 
 from server import Node
 
@@ -14,6 +17,7 @@ if __name__ == "__main__":
                         help = "Esta es la dierección IP de un nodo en la red." + 
                         "Si unes este nodo a la red necesitas darle esta dirección, "+
                         "si no este nodo nunca será añadido a la red.")
+    parser.add_argument('--client', action = "store_true", default = None)
     
     matcher = re.compile("\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d{1,6}")
     args = parser.parse_args()
@@ -23,6 +27,8 @@ if __name__ == "__main__":
     if args.addr_known and not matcher.fullmatch(args.addr_known.split()[0]):
         parser.error(error_message %("addr_known", args.addr_known))
 
-    
-    node = Node(address = args.addr_ip, introduction_node = args.addr_known)
+    if(args.client):
+        client = client(address = args.addr_ip)
+    else:
+        node = Node(address = args.addr_ip, introduction_node = args.addr_known)
     

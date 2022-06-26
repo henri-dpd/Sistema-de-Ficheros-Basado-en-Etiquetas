@@ -2,7 +2,7 @@ import zmq
 
 
 class request:
-    def __init__(self, context, error = "ERROR",  request_timeout = 10000, request_retries = 2):
+    def __init__(self, context, error = "ERROR",  request_timeout = 1000, request_retries = 2):
         
         self.request_timeout = request_timeout
         self.request_retries = request_retries

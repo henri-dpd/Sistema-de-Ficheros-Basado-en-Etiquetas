@@ -1,13 +1,15 @@
+from audioop import add
 import os
-import threading
 import zmq
 
 class client:
-    def __init__(self):
+    def __init__(self, address):
+        print("iniciado cliente en la direccion: " + str(address))
+        self.address = address
         self.context = zmq.Context()
         self.sock_req = self.context.socket(zmq.REQ)
         self.sock_rep = self.context.socket(zmq.REP)
-        self.sock_rep.bind("tcp://" + "127.0.0.1:5050") 
+        self.sock_rep.bind("tcp://" + address) 
         self.send_info()
         
 
@@ -18,22 +20,32 @@ class client:
             
             params = {buffer[i] : buffer[i + 1] for i in range(2, len(buffer), 2) }     
 
-                
-            self.sock_req.send_json({"command_name": buffer[1], "method_params": params , "procedence_addr": "127.0.0.1:5050"})
-            if buffer[1] == "send_file":
-                info = self.get_file(params["path"])
+            print({"command_name": buffer[1], "method_params": params , "procedence_addr": self.address})                
+            self.sock_req.send_json({"command_name": buffer[1], "method_params": params , "procedence_addr": self.address})
             if buffer[1] == "recv_file":
-                info = self.sock_req.recv_json()
+                self.sock_req.recv_json()
                 info = self.send_file(params["path"])
             else:
                 info = self.sock_req.recv_json()
             print(info)
-            
             self.sock_req.disconnect("tcp://"+ buffer[0])
+            
+            if buffer[1] == "send_file":
+                print("get file")
+                self.sock_req.connect("tcp://"+ info["return_info"]["address"])
+                self.sock_req.send_json({"command_name": "get_object", "method_params": {"path" : params["path"]}, "procedence_addr": self.address})
+                self.get_file(params["path"])
+                self.sock_req.disconnect("tcp://"+ info["return_info"]["address"])
+                
+            
 
+    # 172.17.0.2:8080 send_file path file1.mf
+    # 172.17.0.2:8080 send_file path file2.mf
+    # 172.17.0.2:8080 send_file path file3.mf
     def get_file(self, path):
         # Open up the file we are going to write to
-        dest = open("client_data/" + os.path.basename(path), 'wb')
+        
+        dest = open("recv_client_data/" + os.path.basename(path), 'wb')
         print("Recibiendo data")
         while True:
             # Start grabing data
@@ -41,14 +53,22 @@ class client:
             # Write the chunk to the file
             dest.write(data)
             if not self.sock_req.getsockopt(zmq.RCVMORE):
-                # If there is not more data to send, then break
                 break
-        return "recived"     
+        print("recived") 
     
+    # 172.17.0.2:8080 get_tag tag a
+    # 172.17.0.2:8080 get_tag tag f
+    # 172.17.0.2:8080 get_tag tag w
+    # 172.17.0.2:8080 get_tag tag e
+    # 172.17.0.2:8080 get_tag tag aa
+    # 172.17.0.2:8080 get_tag tag ff
+    #get_tag
+    
+    # 172.17.0.2:8080 recv_file path file1.mf destination_address 172.17.0.4:8080 tags [a,f,w]
+    # 172.17.0.3:8080 recv_file path file2.mf destination_address 172.17.0.4:8080 tags [aa,f,w]
+    # 172.17.0.2:8080 recv_file path file3.mf destination_address 172.17.0.4:8080 tags [aa,ff,w,e]
     def send_file(self, path):
-        print("Hola?")
         recv = self.sock_rep.recv()
-        print(recv)
         # Verify that the file is available
         if not os.path.isfile("client_data/" + path):
             self.sock_rep.send('')
@@ -69,6 +89,7 @@ class client:
                 # Finish it off
                 self.sock_rep.send(stream)   
         return "finished"
-
+""" 
 client()
 
+ """
