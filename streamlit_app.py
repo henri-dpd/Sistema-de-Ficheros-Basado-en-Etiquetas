@@ -66,5 +66,8 @@ page_names = {
     "Page_2" : page2
 }
 
-select_page = st.sidebar.selectbox('Seleccionar pagina', page_names.keys())
-page_names[select_page]()
+def run():
+    select_page = st.sidebar.selectbox('Seleccionar pagina', page_names.keys())
+    page_names[select_page]()
+    
+run()

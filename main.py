@@ -4,11 +4,12 @@ from multiprocessing.connection import Client
 import re
 from socket import gethostbyname, gethostname
 from client import client
-
 from server import Node
+import subprocess
+import os 
 
 if __name__ == "__main__":
-    
+    """     
     parser = argparse.ArgumentParser()
     parser.add_argument('--addr_ip', default = gethostbyname(gethostname()) + ":8080", 
                         help = "Esta es la dirección IP del nodo." +  
@@ -26,9 +27,11 @@ if __name__ == "__main__":
         parser.error(error_message %("addr_ip", args.addr_ip))
     if args.addr_known and not matcher.fullmatch(args.addr_known.split()[0]):
         parser.error(error_message %("addr_known", args.addr_known))
-
     if(args.client):
+    
         client = client(address = args.addr_ip)
     else:
         node = Node(address = args.addr_ip, introduction_node = args.addr_known)
+ """
+    process = subprocess.Popen(["streamlit", "run", 'streamlit_app.py'])
     
