@@ -13,4 +13,4 @@ RUN pip install streamlit
 EXPOSE 8080
 
 #Default running
-#ENTRYPOINT ["python", "main.py"] 
+ENTRYPOINT ["python", "main.py"] 

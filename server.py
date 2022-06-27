@@ -370,7 +370,7 @@ class Node():
         else:
             destination_id, new_destination_address = self.find_successor(tag_id, sock_req)
             recv_json = sock_req.make_request(json_to_send = {'command_name': 'get_tag', 
-                                                                'method_params': {'tag_id': tag}, 
+                                                                'method_params': {'tag': tag}, 
                                                                 "procedence_address": self.address, 
                                                                 "procedence_method": "command_get_tag"}, 
                                                 requester_object= self, 
@@ -381,6 +381,8 @@ class Node():
     def get_tag(self, tag_id):
         if tag_id in self.hash_tags:
             return self.hash_tags[tag_id]
+        else: 
+            return {}
 
     
     def command_send_file(self, path, sock_req):

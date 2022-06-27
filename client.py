@@ -2,6 +2,15 @@ from audioop import add
 import os
 import zmq
 
+def singleton_dec(class_):
+    instances = {}
+    def getinstance(*args,**kwargs):
+        if class_ not in instances:
+            instances[class_] = class_(*args, **kwargs)
+        return instances[class_]
+    return getinstance
+            
+@singleton_dec  
 class client:
     def __init__(self, address):
         print("iniciado cliente en la direccion: " + str(address))
@@ -10,33 +19,30 @@ class client:
         self.sock_req = self.context.socket(zmq.REQ)
         self.sock_rep = self.context.socket(zmq.REP)
         self.sock_rep.bind("tcp://" + address) 
-        self.send_info()
         
 
-    def send_info(self):
-        while True:
-            buffer = input().split()
-            self.sock_req.connect("tcp://"+ buffer[0])
-            
-            params = {buffer[i] : buffer[i + 1] for i in range(2, len(buffer), 2) }     
+    def send_info(self, address, command_name, params):
+        self.sock_req.connect("tcp://"+ address)   
 
-            print({"command_name": buffer[1], "method_params": params , "procedence_addr": self.address})                
-            self.sock_req.send_json({"command_name": buffer[1], "method_params": params , "procedence_addr": self.address})
-            if buffer[1] == "recv_file":
-                self.sock_req.recv_json()
-                info = self.send_file(params["path"])
-            else:
-                info = self.sock_req.recv_json()
-            print(info)
-            self.sock_req.disconnect("tcp://"+ buffer[0])
-            
-            if buffer[1] == "send_file":
-                print("get file")
-                self.sock_req.connect("tcp://"+ info["return_info"]["address"])
-                self.sock_req.send_json({"command_name": "get_object", "method_params": {"path" : params["path"]}, "procedence_addr": self.address})
-                self.get_file(params["path"])
-                self.sock_req.disconnect("tcp://"+ info["return_info"]["address"])
+        print({"command_name": command_name, "method_params": params , "procedence_addr": self.address})                
+        self.sock_req.send_json({"command_name": command_name, "method_params": params , "procedence_addr": self.address})
+        if not self.sock_req.poll(2000):
+            return "ERROR"    
+        if command_name == "recv_file":
+            self.sock_req.recv_json()
+            info = self.send_file(params["path"])
+        else:
+            info = self.sock_req.recv_json()
+        self.sock_req.disconnect("tcp://"+ address)
+        
+        if command_name == "send_file":
+            print("get file")
+            self.sock_req.connect("tcp://"+ info["return_info"]["address"])
+            self.sock_req.send_json({"command_name": "get_object", "method_params": {"path" : params["path"]}, "procedence_addr": self.address})
+            info = self.get_file(params["path"])
+            self.sock_req.disconnect("tcp://"+ info["return_info"]["address"])
                 
+        print(info)
             
 
     # 172.17.0.2:8080 send_file path file1.mf
@@ -54,7 +60,8 @@ class client:
             dest.write(data)
             if not self.sock_req.getsockopt(zmq.RCVMORE):
                 break
-        print("recived") 
+        
+        return "recived"
     
     # 172.17.0.2:8080 get_tag tag a
     # 172.17.0.2:8080 get_tag tag f
