@@ -29,6 +29,7 @@ class Node():
         self.waiting_time = 10
         self.is_leader = False
         self.hash_tags = {} # tag_id: {objects_id, objetc_path}
+        self.parts_file = {}
         
         #De 5mb(/16 pq en cada iteración se recibe 16 bytes)
         self.size_files = 5242880/16
@@ -51,7 +52,8 @@ class Node():
                          "stabilize" : self.command_stabilize,
                          "recv_tag" : self.command_recv_tag,
                          "get_tag": self.command_get_tag,
-                         "get_object" : self.send_file
+                         "get_object" : self.send_file,
+                         "parts_file" : self.command_parts_file
                          }
 
         self.commands_request = {"rect", "stabilize", "find_successor", "find_predecessor", 
@@ -389,8 +391,7 @@ class Node():
             return {}
 
     def command_get_parts_file(self, path):
-        #Devolver de alguna forma las partes
-        self.sock_rep.send_json({"response": "ACK", "return_info": {"parts" : 1 } })
+        self.sock_rep.send_json({"response": "ACK", "return_info": {"parts" : self.parts_file[path]} })
     
     def command_send_file(self, path, sock_req):
         print("command send file")
@@ -495,6 +496,22 @@ class Node():
                 if not socket_request.getsockopt(zmq.RCVMORE):
                     # If there is not more data to send, then break
                     break
+
+            ###############################################################################
+            
+            
+            recv_json = sock_req.make_request(json_to_send = {'command_name': 'parts_file', 
+                                                              'method_params': {'path': path, 
+                                                                                'parts': part},
+                                                              "procedence_address": self.address, 
+                                                              "procedence_method": "recv_file"}, 
+                                                        requester_object= self, 
+                                                        destination_id = destination_id, 
+                                                        destination_address = new_destination_address )
+
+
+
+            ###################################################################################
             socket_request.disconnect("tcp://" + str(destination_address))
             socket_request.close()
             tags = tags[1:len(tags)-1].split(",")
@@ -528,6 +545,12 @@ class Node():
                                                       requester_object= self, 
                                                       destination_id = destination_id, 
                                                       destination_address = new_destination_address )
+
+
+    def command_parts_file(self, path, parts):
+        self.parts_file[path] = parts 
+
+        self.sock_rep.send_json({"response": "ACK", "return_info": {}})
 
     def command_recv_tag(self, path, path_id, tag_id):
         self.recv_tag(path, path_id, tag_id)
