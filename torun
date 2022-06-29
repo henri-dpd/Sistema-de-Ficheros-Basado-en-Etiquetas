@@ -1,0 +1,9 @@
+# Build image
+docker build -t get-started-deployment-and-test:v1
+
+# Run nodes
+docker run --rm --name chord1 -it -P -v $(pwd):/usr/src/app get-started-deployment-and-test:v1
+docker run --rm --name client -it -P -v $(pwd):/usr/src/app get-started-deployment-and-test:v1 --client
+
+# Run client
+docker run --rm --name chord2 -it -P -v $(pwd):/usr/src/app get-started-deployment-and-test:v1 --addr_known "172.17.0.2:8080

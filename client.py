@@ -35,12 +35,26 @@ class client:
             info = self.sock_req.recv_json()
         self.sock_req.disconnect("tcp://"+ address)
         
-        if command_name == "send_file":
-            print("get file")
-            self.sock_req.connect("tcp://"+ info["return_info"]["address"])
-            self.sock_req.send_json({"command_name": "get_object", "method_params": {"path" : params["path"]}, "procedence_addr": self.address})
-            info = self.get_file(params["path"])
-            self.sock_req.disconnect("tcp://"+ info["return_info"]["address"])
+        #if command_name == "send_file":
+            #print("get file")
+            # self.sock_req.connect("tcp://"+ info["return_info"]["address"])
+            # self.sock_req.send_json({"command_name": "get_object", "method_params": {"path" : params["path"]}, "procedence_addr": self.address})
+            # info = self.get_file(params["path"])
+            # self.sock_req.disconnect("tcp://"+ info["return_info"]["address"])
+            
+        if command_name == "get_parts_file":
+            parts = info["return_info"]["parts"]
+            for p in range(parts):
+                new_params = params
+                new_params["path"] = new_params["path"] + ".p" + str(p+1)
+                self.sock_req.send_json({"command_name": "send_file", "method_params": new_params , "procedence_addr": self.address})
+                info = self.sock_req.recv_json()
+            
+                
+                self.sock_req.connect("tcp://"+ info["return_info"]["address"])
+                self.sock_req.send_json({"command_name": "get_object", "method_params": {"path" : params["path"]}, "procedence_addr": self.address})
+                info = self.get_file(params["path"])
+                self.sock_req.disconnect("tcp://"+ info["return_info"]["address"])
                 
         print(info)
             
@@ -60,6 +74,8 @@ class client:
             dest.write(data)
             if not self.sock_req.getsockopt(zmq.RCVMORE):
                 break
+            
+        dest.close()
         
         return "recived"
     

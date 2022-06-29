@@ -30,6 +30,9 @@ class Node():
         self.is_leader = False
         self.hash_tags = {} # tag_id: {objects_id, objetc_path}
         
+        #De 5mb(/16 pq en cada iteración se recibe 16 bytes)
+        self.size_files = 5242880/16
+        
         self.commands = {"join": self.command_join, 
                          "are_you_alive": self.command_are_you_alive,
                          "get_params": self.command_get_params, 
@@ -41,6 +44,7 @@ class Node():
                          "find_predecessor": self.command_find_predecessor,
                          "recv_file" : self.command_recv_file,
                          "send_file" : self.command_send_file,
+                         "get_parts_file": self.command_get_parts_file,
                          "closest_predecessor_fing" : self.command_closest_predecessor_fing,
                          "get_k_list" : self.command_get_k_list,
                          "rect" : self.command_rect,
@@ -384,6 +388,9 @@ class Node():
         else: 
             return {}
 
+    def command_get_parts_file(self, path):
+        #Devolver de alguna forma las partes
+        self.sock_rep.send_json({"response": "ACK", "return_info": {"parts" : 1 } })
     
     def command_send_file(self, path, sock_req):
         print("command send file")
@@ -426,10 +433,12 @@ class Node():
                 self.sock_rep.send(stream)
             
 
-    def command_recv_file(self, path, destination_address, tags, sock_req):
+    #def command_recv_file(self, path, destination_address, tags, sock_req):
+    def command_recv_file(self, path, destination_address, tags, sock_req, part = 1):
         self.sock_rep.send_json({})   
         
-        object_id = int(hashlib.sha1(bytes(path, 'utf-8') ).hexdigest(),16)
+        #object_id = int(hashlib.sha1(bytes(path, 'utf-8') ).hexdigest(),16)
+        object_id = int(hashlib.sha1(bytes(path+ ".p"+str(part), 'utf-8') ).hexdigest(),16)
         
         if self.address == self.predecessor_address or self.id == object_id or self.between(object_id, (self.predecessor_id, self.id)):
         
@@ -439,7 +448,8 @@ class Node():
             except:
                 pass
             
-            dest = open("data/" + str(self.id) + "/" + os.path.basename(path), 'wb')
+            #dest = open("data/" + str(self.id) + "/" + os.path.basename(path), 'wb')
+            dest = open("data/" + str(self.id) + "/" + os.path.basename(path) + ".p"+str(part), 'wb')
             socket_request = self.context.socket(zmq.REQ)
         
             socket_request.connect('tcp://' + str(destination_address))
@@ -449,7 +459,35 @@ class Node():
             print("Yo: " + str(self.address) + str(self.id))
             print("Guardo objeto: " + str(path))
 
+            #cant_iter dice cuantos bytes llegan(por cada iteración llega 16 bytes), 
+            # parts es la parte en que se escribe 
+            cant_iter = 0
+            
             while True:
+                
+                cant_iter += 1
+                if cant_iter%self.size_files:
+                    part += 1
+                    dest.close()
+                    
+                    object_id = int(hashlib.sha1(bytes(path+ ".p"+str(part), 'utf-8') ).hexdigest(),16)
+        
+                    if self.address == self.predecessor_address or self.id == object_id or self.between(object_id, (self.predecessor_id, self.id)):
+                        dest = open("data/" + str(self.id) + "/" + os.path.basename(path) + ".p"+str(part) , 'wb')    
+                    else:
+                        destination_id, new_destination_address = self.find_successor(object_id, sock_req)
+                        recv_json = sock_req.make_request(json_to_send = {'command_name': 'recv_file', 
+                                                                                    'method_params': {'path': path, 
+                                                                                                    'destination_address': destination_address,
+                                                                                                    'tags': tags,
+                                                                                                    "part": part}, 
+                                                                                    "procedence_address": self.address, 
+                                                                                    "procedence_method": "recv_file"}, 
+                                                                    requester_object= self, 
+                                                                    destination_id = destination_id, 
+                                                                    destination_address = new_destination_address )
+                        break
+                    
                 # Start grabing data
                 data = socket_request.recv()
                 # Write the chunk to the file
@@ -460,6 +498,9 @@ class Node():
             socket_request.disconnect("tcp://" + str(destination_address))
             socket_request.close()
             tags = tags[1:len(tags)-1].split(",")
+            
+            object_id = int(hashlib.sha1(bytes(path, 'utf-8') ).hexdigest(),16)
+            
             for tag in tags:
                 tag_id = int(hashlib.sha1(bytes(tag, 'utf-8') ).hexdigest(),16)
                 if self.address == self.predecessor_address or self.id == object_id or self.between(tag_id, (self.predecessor_id, self.id)):
