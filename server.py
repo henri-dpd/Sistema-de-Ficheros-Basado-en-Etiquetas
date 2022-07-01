@@ -26,9 +26,12 @@ class Node():
         self.k_list = [(self.id, self.address) for _ in range(self.k)]
         self.finger_table_length = int(math.log2(self.size))
         self.finger_table = [None for _ in range(self.size)]
-        self.waiting_time = 10
+        self.waiting_time_stabilize = 5
+        self.waiting_time_fix_finger = 1
+        self.waiting_time_repl = 10
         self.is_leader = False
         self.hash_tags = {} # tag_id: {objects_id, objetc_path}
+        self.replication = {"id" : None, "tags" : {}}
         
         self.commands = {"join": self.command_join, 
                          "are_you_alive": self.command_are_you_alive,
@@ -47,11 +50,16 @@ class Node():
                          "stabilize" : self.command_stabilize,
                          "recv_tag" : self.command_recv_tag,
                          "get_tag": self.command_get_tag,
-                         "get_object" : self.send_file
+                         "get_object" : self.send_file,
+                         "cut_object" : self.cut_file,
+                         "send_files_and_tag_for_new_node" : self.send_files_and_tag_for_new_node,
+                         "get_files_for_replication": self.get_files_for_replication,
+                         "send_files_for_replication": self.send_files_for_replication
                          }
 
         self.commands_request = {"rect", "stabilize", "find_successor", "find_predecessor", 
-                                 "closest_predecessor_fing", "recv_file","get_tag", "send_file"}
+                                 "closest_predecessor_fing", "recv_file","get_tag", "send_file",
+                                 "send_files_and_tag_for_new_node", "send_files_for_replication"}
 
         print("Started node ", (self.id, self.address))
         client_requester = request(context = self.context)
@@ -85,6 +93,61 @@ class Node():
                                                                          "procedence_address" : self.address}, 
                                                           destination_address = introduction_node,
                                                           destination_id = introduction_node_id)
+            
+            recieved_json = client_requester.make_request(json_to_send = {"command_name" : "find_successor",
+                                                                         "method_params" : {"id": self.id}, 
+                                                                         "procedence_address" : self.address}, 
+                                                          destination_address = self.predecessor_address,
+                                                          destination_id = self.predecessor_id)
+            
+            actual_succesor = recieved_json["return_info"]
+            
+            recieved_json = client_requester.make_request(json_to_send = {"command_name" : "send_files_and_tag_for_new_node",
+                                                                         "method_params" : {"id": self.id}, 
+                                                                         "procedence_address" : self.address}, 
+                                                          destination_address = actual_succesor[1],
+                                                          destination_id = actual_succesor[0])
+
+            
+            list_of_tags_recieved = recieved_json["return_info"]["list_of_tags_to_send"]
+            list_of_file_recieved = recieved_json["return_info"]["list_of_file_to_send"]
+            
+            for tag in list_of_tags_recieved:
+                self.hash_tags[tag]= list_of_tags_recieved[tag]
+            
+            for filename in list_of_file_recieved:
+                print(filename)
+                socket_request = self.context.socket(zmq.REQ)
+                socket_request.connect('tcp://' + str(actual_succesor[1]))
+                print('tcp://' + actual_succesor[1])
+                
+                socket_request.send_json({"command_name": "cut_object", 
+                                         "method_params": {"path" : filename}, 
+                                         "procedence_addr": self.address})
+                
+                try:
+                    os.mkdir("data")
+                except:
+                    pass
+                
+                try:
+                    os.mkdir("data/" + str(self.id))
+                except:
+                    pass
+                
+                dest = open("data/" + str(self.id) + "/" + filename, 'wb')
+                
+
+                while True:
+                    # Start grabing data
+                    data = socket_request.recv()
+                    # Write the chunk to the file
+                    dest.write(data)
+                    if not socket_request.getsockopt(zmq.RCVMORE):
+                        # If there is not more data to send, then break
+                        break
+                socket_request.disconnect("tcp://" + str(actual_succesor[1]))
+                socket_request.close()           
         else:
             self.predecessor_address, self.predecessor_id = self.address, self.id
             self.is_leader = True
@@ -102,7 +165,6 @@ class Node():
 
     def command_join(self):        
         self.sock_rep.send_json({"response": "ACK_to_join", "return_info": {}})
-        
 
     def execute_join(self, introduction_node, introduction_node_id, id_to_found_pred, sock_req):
         recv_json = sock_req.make_request(json_to_send = {"command_name" : "find_predecessor",
@@ -127,6 +189,58 @@ class Node():
             return False
         self.k_list = recv_json['return_info']['k_list']
         return True
+    
+    def send_files_and_tag_for_new_node(self, id, sock_req):
+        
+        try:
+           os.mkdir("data")
+        except:
+            pass
+            
+        
+        try:
+            os.mkdir("data/" + str(self.id))
+        except:
+            pass
+        
+        os.system("ls ./data/" + str(self.id) + " > data/" + str(self.id) + "/temp.txt")
+        temp_file = open("data/" + str(self.id) + "/temp.txt", 'r')
+        
+        list_of_files = temp_file.read().split("\n")
+        list_of_file_to_send = []
+        
+        for filename in list_of_files:
+            if filename != "temp.txt" and filename != "" and filename != "Replication":
+                file_id = int(hashlib.sha1(bytes(filename, 'utf-8') ).hexdigest(),16)
+                if file_id <= id:
+                    
+                    if self.id < id and file_id <= self.id:
+                        continue # Caso esquinado donde self.id < id, en
+                                 # este caso solo se entregan los files
+                                 # entre el id actual y el que se pide
+                    
+                    list_of_file_to_send.append(filename)
+                    
+        list_of_tags_to_send = {}
+        
+        for tag_id in self.hash_tags:
+            if tag_id <= id:
+                
+                if self.id < id and tag_id <= self.id:
+                        continue # Caso esquinado donde self.id < id, en
+                                 # este caso solo se entregan las etiquetas
+                                 # entre el id actual y el que se pide
+                
+                list_of_tags_to_send[tag_id] = self.hash_tags[tag_id]
+                
+        for tag_id in list_of_tags_to_send:
+            del(self.hash_tags[tag_id])
+                
+        os.system("rm data/" + str(self.id) + "/temp.txt")
+        self.sock_rep.send_json({"response": "ACK", "return_info": {"list_of_tags_to_send" : list_of_tags_to_send,
+                                                                    "list_of_file_to_send" : list_of_file_to_send},
+                                 "procedence_addr": self.address } )
+
 
     def command_find_predecessor(self, id, sock_req):
         print("entro comando find predecessor")
@@ -193,13 +307,74 @@ class Node():
         self.waiting_for_commands(client_requester)
         
     def thread_verify(self):
-        countdown = time()
+        countdown_stabilize = time()
+        countdown_fix_finger = time()
+        countdown_repl = time()
         rand = Random()
         rand.seed()
         requester = request(context = self.context)
         choices = [i for i in range(self.size)]
         while True:
-            if abs (countdown - time( ) ) > self.waiting_time:
+            
+            if abs (countdown_fix_finger - time( ) ) > self.waiting_time_fix_finger:
+                if self.predecessor_id != self.id:
+                    index = rand.choice( choices )   
+                    self.finger_table[ index ] = self.find_successor(self.start(index), sock_req = requester)
+                countdown_fix_finger = time()
+            
+            if abs (countdown_repl - time( ) ) > self.waiting_time_repl:
+                
+                if self.predecessor_id != self.id:
+                    
+                    actual_succesor = self.find_successor(self.id, requester)
+                    
+                    if(actual_succesor[0] != self.predecessor_id[0]):
+                    
+                        try:
+                            os.mkdir("data")
+                        except:
+                            pass
+                        
+                        try:
+                            os.mkdir("data/" + str(self.id))
+                        except:
+                            pass
+                        
+                        try:
+                            os.mkdir("data/" + str(self.id) + "/Replication")
+                        except:
+                            pass
+                    
+                        if self.replication["id"] != self.predecessor_id:
+                            
+                            if self.between(self.replication, (self.predecessor_id, self.id)):
+                                self.replication = {"id" : None, "tags" : {}}
+                                os.system("rm data/ " + str(self.id) + "/Replication *")
+                            
+                            else:
+                                os.system("ls ./data/" + str(self.id) + "/Replication > data/" + str(self.id) + "/replication_temp.txt")
+                                replication_temp_file = open("data/" + str(self.id) + "/replication_temp.txt", 'r')
+                                list_of_files = replication_temp_file.read().split("\n")
+                                                            
+                                os.system("mv data/" + str(self.id) + "/Replication/* data/" + str(self.id))
+                                
+                                recv_json = requester.make_request(json_to_send = {"command_name" : "get_files_for_replication", 
+                                                                        "method_params" : {"list_files" : list_of_files,
+                                                                                        "destination_address" : self.address}, 
+                                                                        "procedence_address" : self.address, }, 
+                                                        destination_id = self.actual_succesor[0], 
+                                                        destination_address = self.actual_succesor[1])
+                            
+                            recv_json = requester.make_request(json_to_send = {"command_name" : "send_files_for_replication", 
+                                                                    "method_params" : {}, 
+                                                                    "procedence_address" : self.address,}, 
+                                                    destination_id = self.predecessor_id, 
+                                                    destination_address = self.predecessor_address)
+
+                
+                countdown_repl = time()
+            
+            if abs (countdown_stabilize - time( ) ) > self.waiting_time_stabilize:
                 if self.predecessor_id != self.id:
                     self.command_stabilize(sock_req = requester)
                     if requester.make_request(json_to_send = {"command_name" : "rect", 
@@ -211,10 +386,7 @@ class Node():
                                               destination_id = self.k_list[0][0], 
                                               destination_address = self.k_list[0][1]) is requester.error:
                         requester.action_for_error(self.k_list[0][1])
-
-                    index = rand.choice( choices )   
-                    self.finger_table[ index ] = self.find_successor(self.start(index), sock_req = requester)                    
-                countdown = time()
+                countdown_stabilize = time()
 
     def command_stabilize(self, sock_req : request):
         print("Stabilize")                     
@@ -370,7 +542,7 @@ class Node():
         else:
             destination_id, new_destination_address = self.find_successor(tag_id, sock_req)
             recv_json = sock_req.make_request(json_to_send = {'command_name': 'get_tag', 
-                                                                'method_params': {'tag_id': tag}, 
+                                                                'method_params': {'tag': tag}, 
                                                                 "procedence_address": self.address, 
                                                                 "procedence_method": "command_get_tag"}, 
                                                 requester_object= self, 
@@ -381,6 +553,8 @@ class Node():
     def get_tag(self, tag_id):
         if tag_id in self.hash_tags:
             return self.hash_tags[tag_id]
+        else:
+            return {}
 
     
     def command_send_file(self, path, sock_req):
@@ -402,16 +576,29 @@ class Node():
         self.sock_rep.send_json(recv_json)
         
     def send_file(self, path):
-        # Verify that the file is available
+        try:
+            os.mkdir("data")
+        except:
+            pass
+        
+        try:
+            os.mkdir("data/" + str(self.id))
+        except:
+            pass
+        
         if not os.path.isfile("data/" + str(self.id) + "/" + path):
             print("data/" + str(self.id) + "/" + path)
             self.sock_rep.send(b'')
             return
+        
         print("Existe el archivo")
+        
         # Open the file for reading
         fn = open("data/" + str(self.id) + "/" + path, 'rb')
         stream = True
+        
         print("Enviando data")
+        
         # Start reading in the file
         while stream:
             # Read the file bit by bit
@@ -422,6 +609,117 @@ class Node():
             else:
                 # Finish it off
                 self.sock_rep.send(stream)
+    
+    def send_files_for_replication(self, sock_req):
+        self.sock_rep.send_json({})
+        
+        os.system("ls ./data/" + str(self.id) + " > data/" + str(self.id) + "/replication_to_send.txt")
+        replication_temp_file = open("data/" + str(self.id) + "/replication_to_send_temp.txt", 'r')
+        list_of_files = replication_temp_file.read().split("\n")
+        
+        pos = []
+        
+        for i in range(len(list_of_files)):
+            if (list_of_files[i] == "Replication" or
+                list_of_files[i] == "" or
+                list_of_files[i] == "replication_to_send_temp.txt"):
+                
+                pos.append(i)
+                
+        for i in range(len(pos), 0, -1):
+            del(list_of_files[i])
+            
+        actual_successor = self.find_successor(self.id, sock_req)
+        
+        recv_json = sock_req.make_request(json_to_send = {"command_name" : "get_files_for_replication", 
+                                                "method_params" : {"list_files" : list_of_files,
+                                                                    "destination_address" : self.address}, 
+                                                "procedence_address" : self.address}, 
+                                destination_id = self.actual_succesor[0], 
+                                destination_address = self.actual_succesor[1])
+    
+    def get_files_for_replication(self, list_files, destination_address):
+        self.sock_rep.send_json({})
+        try:
+            os.mkdir("data")
+        except:
+            pass
+        
+        try:
+            os.mkdir("data/" + str(self.id))
+        except:
+            pass
+        
+        try:
+            os.mkdir("data/" + str(self.id) + "/Replication" )
+        except:
+            pass
+        
+        for path in list_files:
+            
+            if path == "":
+                continue
+            
+            dest = open("data/" + str(self.id) + "/Replication" + os.path.basename(path), 'wb')
+            socket_request = self.context.socket(zmq.REQ)
+        
+            socket_request.connect('tcp://' + str(destination_address))
+            print('tcp://' + destination_address)
+            
+            # socket_request.send(path.encode())
+            self.socket_request.send_json({"command_name": "get_object", "method_params": {"path" : path}, "procedence_addr": self.address})
+                
+            while True:
+                # Start grabing data
+                data = socket_request.recv()
+                # Write the chunk to the file
+                dest.write(data)
+                if not socket_request.getsockopt(zmq.RCVMORE):
+                    # If there is not more data to send, then break
+                    break
+            socket_request.disconnect("tcp://" + str(destination_address))
+            socket_request.close()
+    
+    def cut_file(self, path):
+        # Verify that the file is available
+        
+        try:
+            os.mkdir("data")
+        except:
+            pass
+        
+        try:
+            os.mkdir("data/" + str(self.id))
+        except:
+            pass
+        
+        if not os.path.isfile("data/" + str(self.id) + "/" + path):
+            print("data/" + str(self.id) + "/" + path)
+            self.sock_rep.send(b'')
+            return
+        
+        print("Existe el archivo")
+        
+        # Open the file for reading
+        fn = open("data/" + str(self.id) + "/" + path, 'rb')
+        stream = True
+        print("Enviando data")
+        
+        # Start reading in the file
+        while stream:
+            # Read the file bit by bit
+            stream = fn.read(128)
+            if stream:
+                # If the stream has more to send then send more
+                self.sock_rep.send(stream, zmq.SNDMORE)
+            else:
+                # Finish it off
+                self.sock_rep.send(stream)
+        
+        #Ahora borrar el archivo
+        if os.path.exists("data/" + str(self.id) + "/" + path):
+            os.system("rm " + "data/" + str(self.id) + "/" + path)
+            print('Archivo borrado con exito.')
             
 
     def command_recv_file(self, path, destination_address, tags, sock_req):
@@ -432,6 +730,11 @@ class Node():
         if self.address == self.predecessor_address or self.id == object_id or self.between(object_id, (self.predecessor_id, self.id)):
         
             # Open up the file we are going to write to
+            try:
+                os.mkdir("data")
+            except:
+                pass
+            
             try:
                 os.mkdir("data/" + str(self.id))
             except:

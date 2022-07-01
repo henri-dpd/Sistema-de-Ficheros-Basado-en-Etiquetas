@@ -45,6 +45,11 @@ class client:
     def get_file(self, path):
         # Open up the file we are going to write to
         
+        try:
+            os.mkdir("recv_client_data")
+        except:
+            pass
+        
         dest = open("recv_client_data/" + os.path.basename(path), 'wb')
         print("Recibiendo data")
         while True:
@@ -64,21 +69,31 @@ class client:
     # 172.17.0.2:8080 get_tag tag ff
     #get_tag
     
-    # 172.17.0.2:8080 recv_file path file1.mf destination_address 172.17.0.4:8080 tags [a,f,w]
-    # 172.17.0.3:8080 recv_file path file2.mf destination_address 172.17.0.4:8080 tags [aa,f,w]
-    # 172.17.0.2:8080 recv_file path file3.mf destination_address 172.17.0.4:8080 tags [aa,ff,w,e]
+    # 172.17.0.2:8080 recv_file path file1.mf destination_address 172.17.0.3:8080 tags [a,f,w]
+    # 172.17.0.2:8080 recv_file path file2.mf destination_address 172.17.0.3:8080 tags [aa,f,w]
+    # 172.17.0.2:8080 recv_file path file3.mf destination_address 172.17.0.3:8080 tags [aa,ff,w,e]
     def send_file(self, path):
         recv = self.sock_rep.recv()
         # Verify that the file is available
+        
+        try:
+            os.mkdir("client_data")
+        except:
+            pass
+        
         if not os.path.isfile("client_data/" + path):
             self.sock_rep.send('')
             return
+        
         print("Leyendo datos")
+        
         # Open the file for reading
         fn = open("client_data/" + path, 'rb')
         stream = True
+        
         # Start reading in the file
         print("Enviando datos")
+        
         while stream:
             # Read the file bit by bit
             stream = fn.read(128)
@@ -89,7 +104,4 @@ class client:
                 # Finish it off
                 self.sock_rep.send(stream)   
         return "finished"
-""" 
-client()
 
- """
