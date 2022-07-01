@@ -26,9 +26,9 @@ class Node():
         self.k_list = [(self.id, self.address) for _ in range(self.k)]
         self.finger_table_length = int(math.log2(self.size))
         self.finger_table = [None for _ in range(self.size)]
-        self.waiting_time_stabilize = 5
-        self.waiting_time_fix_finger = 1
-        self.waiting_time_repl = 10
+        self.waiting_time_stabilize = 10
+        self.waiting_time_fix_finger = 5
+        self.waiting_time_repl = 20
         self.is_leader = False
         self.hash_tags = {} # tag_id: {objects_id, objetc_path}
         self.replication = {"id" : None, "tags" : {}}
@@ -327,7 +327,7 @@ class Node():
                 
                 if self.predecessor_id != self.id:
                     
-                    actual_succesor = self.find_successor(self.id, requester)
+                    actual_succesor = self.finger_table[0]
                     
                     if(actual_succesor[0] != self.predecessor_id):
                     
@@ -350,7 +350,7 @@ class Node():
                             
                             if self.between(self.replication, (self.predecessor_id, self.id)):
                                 self.replication = {"id" : None, "tags" : {}}
-                                os.system("rm data/ " + str(self.id) + "/Replication *")
+                                os.system("rm data/" + str(self.id) + "/Replication/*")
                             
                             else:
                                 os.system("ls ./data/" + str(self.id) + "/Replication > data/" + str(self.id) + "/replication_temp.txt")
@@ -365,6 +365,8 @@ class Node():
                                                                         "procedence_address" : self.address, }, 
                                                         destination_id = self.actual_succesor[0], 
                                                         destination_address = self.actual_succesor[1])
+                                
+                                os.system("rm data/" + str(self.id) + "/replication_temp.txt")
                             
                             recv_json = requester.make_request(json_to_send = {"command_name" : "send_files_for_replication", 
                                                                     "method_params" : {}, 
@@ -643,7 +645,7 @@ class Node():
         for i in range(len(pos), 0, -1):
             del(list_of_files[i])
             
-        actual_successor = self.find_successor(self.id, sock_req)
+        actual_successor = self.finger_table[0]
         
         recv_json = sock_req.make_request(json_to_send = {"command_name" : "get_files_for_replication", 
                                                 "method_params" : {"list_files" : list_of_files,
@@ -651,6 +653,8 @@ class Node():
                                                 "procedence_address" : self.address}, 
                                 destination_id = self.actual_succesor[0], 
                                 destination_address = self.actual_succesor[1])
+
+        os.system("rm data/" + str(self.id) + "/replication_to_send_temp.txt")
     
     def get_files_for_replication(self, list_files, destination_address):
         self.sock_rep.send_json({})
@@ -681,7 +685,9 @@ class Node():
             print('tcp://' + destination_address)
             
             # socket_request.send(path.encode())
-            self.socket_request.send_json({"command_name": "get_object", "method_params": {"path" : path}, "procedence_addr": self.address})
+            self.socket_request.send_json({"command_name": "get_object", 
+                                           "method_params": {"path" : path}, 
+                                           "procedence_addr": self.address})
                 
             while True:
                 # Start grabing data
