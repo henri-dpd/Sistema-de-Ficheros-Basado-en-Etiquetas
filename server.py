@@ -54,7 +54,8 @@ class Node():
                          "cut_object" : self.cut_file,
                          "send_files_and_tag_for_new_node" : self.send_files_and_tag_for_new_node,
                          "get_files_for_replication": self.get_files_for_replication,
-                         "send_files_for_replication": self.send_files_for_replication
+                         "send_files_for_replication": self.send_files_for_replication,
+                         "get_tag_for_replication": self.get_tag_for_replication
                          }
 
         self.commands_request = {"rect", "stabilize", "find_successor", "find_predecessor", 
@@ -328,7 +329,7 @@ class Node():
                     
                     actual_succesor = self.find_successor(self.id, requester)
                     
-                    if(actual_succesor[0] != self.predecessor_id[0]):
+                    if(actual_succesor[0] != self.predecessor_id):
                     
                         try:
                             os.mkdir("data")
@@ -371,6 +372,16 @@ class Node():
                                                     destination_id = self.predecessor_id, 
                                                     destination_address = self.predecessor_address)
 
+                            self.replication["id"] = self.predecessor_id
+                            
+                            recv_json = requester.make_request(json_to_send = {"command_name" : "get_tag_for_replication", 
+                                                                    "method_params" : {},
+                                                                    "procedence_address" : self.address,}, 
+                                                    destination_id = self.predecessor_id, 
+                                                    destination_address = self.predecessor_address)
+                            
+                            self.replication["tags"] = recv_json["tags"]
+                            
                 
                 countdown_repl = time()
             
@@ -609,6 +620,9 @@ class Node():
             else:
                 # Finish it off
                 self.sock_rep.send(stream)
+    
+    def get_tag_for_replication(self):
+        self.sock_rep.send_json({"response": "ACK", "tags" : self.hash_tags})
     
     def send_files_for_replication(self, sock_req):
         self.sock_rep.send_json({})
