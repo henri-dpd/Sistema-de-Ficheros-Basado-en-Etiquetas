@@ -325,12 +325,18 @@ class Node():
             
             if abs (countdown_repl - time( ) ) > self.waiting_time_repl:
                 
+                print("\n")
+                print("Replicando...\n")
+                
                 if self.predecessor_id != self.id:
+                    print("Hay más de un nodo\n")
                     
                     actual_succesor = self.finger_table[0]
-                    
+                        
                     if(actual_succesor[0] != self.predecessor_id):
-                    
+                        
+                        print("Hay más de dos nodos\n")
+                        
                         try:
                             os.mkdir("data")
                         except:
@@ -348,11 +354,15 @@ class Node():
                     
                         if self.replication["id"] != self.predecessor_id:
                             
-                            if self.between(self.replication, (self.predecessor_id, self.id)):
+                            print("Algo cambio, es necesario replicar\n")
+                            
+                            if self.between(self.replication["id"], (self.predecessor_id, self.id)):
+                                print("Un nodo fue agregado, replicando...\n")
                                 self.replication = {"id" : None, "tags" : {}}
                                 os.system("rm data/" + str(self.id) + "/Replication/*")
                             
                             else:
+                                print("Un nodo fue eliminado, replicando...\n")
                                 os.system("ls ./data/" + str(self.id) + "/Replication > data/" + str(self.id) + "/replication_temp.txt")
                                 replication_temp_file = open("data/" + str(self.id) + "/replication_temp.txt", 'r')
                                 list_of_files = replication_temp_file.read().split("\n")
@@ -383,6 +393,9 @@ class Node():
                                                     destination_address = self.predecessor_address)
                             
                             self.replication["tags"] = recv_json["tags"]
+                            
+                            print(self.replication)
+                            print("Replicación satisfactoria.\n")
                             
                 
                 countdown_repl = time()
