@@ -63,6 +63,25 @@ class Node():
                                  "closest_predecessor_fing", "recv_file","get_tag", "send_file",
                                  "send_files_and_tag_for_new_node", "send_files_for_replication",
                                  "recv_tag"}
+        
+        try:
+            os.mkdir("data")
+        except:
+            pass
+        
+        try:
+            os.mkdir("data/" + str(self.id))
+        except:
+            pass
+        
+        os.system("rm data/" + str(self.id) + "/*")
+        
+        try:
+            os.mkdir("data/" + str(self.id) + "/Replication" )
+        except:
+            pass
+        
+        os.system("rm data/" + str(self.id) + "/Replication/*")
 
         print("Started node ", (self.id, self.address))
         client_requester = request(context = self.context)
@@ -133,15 +152,6 @@ class Node():
                                          "method_params": {"path" : filename}, 
                                          "procedence_addr": self.address})
                 
-                try:
-                    os.mkdir("data")
-                except:
-                    pass
-                
-                try:
-                    os.mkdir("data/" + str(self.id))
-                except:
-                    pass
                 
                 dest = open("data/" + str(self.id) + "/" + filename, 'wb')
                 
@@ -200,15 +210,6 @@ class Node():
     
     def send_files_and_tag_for_new_node(self, id, sock_req):
         
-        try:
-           os.mkdir("data")
-        except:
-            pass
-        
-        try:
-            os.mkdir("data/" + str(self.id))
-        except:
-            pass
         
         os.system("ls ./data/" + str(self.id) + " > data/" + str(self.id) + "/temp.txt")
         temp_file = open("data/" + str(self.id) + "/temp.txt", 'r')
@@ -362,20 +363,6 @@ class Node():
                         print(self.predecessor_id)
                         print("\n")
                         
-                        try:
-                            os.mkdir("data")
-                        except:
-                            pass
-                        
-                        try:
-                            os.mkdir("data/" + str(self.id))
-                        except:
-                            pass
-                        
-                        try:
-                            os.mkdir("data/" + str(self.id) + "/Replication")
-                        except:
-                            pass
                     
                         if self.replication["id"] != self.predecessor_id:
                             
@@ -669,15 +656,6 @@ class Node():
         self.sock_rep.send_json(recv_json)
         
     def send_file(self, path):
-        try:
-            os.mkdir("data")
-        except:
-            pass
-        
-        try:
-            os.mkdir("data/" + str(self.id))
-        except:
-            pass
         
         if not os.path.isfile("data/" + str(self.id) + "/" + path):
             print("data/" + str(self.id) + "/" + path)
@@ -718,16 +696,6 @@ class Node():
     def send_files_for_replication(self, sock_req):
         self.sock_rep.send_json({"response": "ACK", "return_info": {}})
         
-        try:
-            os.mkdir("data")
-        except:
-            pass
-        
-        try:
-            os.mkdir("data/" + str(self.id))
-        except:
-            pass
-        
         os.system("ls ./data/" + str(self.id) + " > data/" + str(self.id) + "/replication_to_send_temp.txt")
         replication_temp_file = open("data/" + str(self.id) + "/replication_to_send_temp.txt", 'r')
         list_of_files = replication_temp_file.read().split("\n")
@@ -758,20 +726,6 @@ class Node():
     
     def get_files_for_replication(self, list_files, destination_address):
         self.sock_rep.send_json({})
-        try:
-            os.mkdir("data")
-        except:
-            pass
-        
-        try:
-            os.mkdir("data/" + str(self.id))
-        except:
-            pass
-        
-        try:
-            os.mkdir("data/" + str(self.id) + "/Replication" )
-        except:
-            pass
         
         for path in list_files:
             
@@ -802,16 +756,6 @@ class Node():
     
     def cut_file(self, path):
         # Verify that the file is available
-        
-        try:
-            os.mkdir("data")
-        except:
-            pass
-        
-        try:
-            os.mkdir("data/" + str(self.id))
-        except:
-            pass
         
         if not os.path.isfile("data/" + str(self.id) + "/" + path):
             print("data/" + str(self.id) + "/" + path)
@@ -850,15 +794,6 @@ class Node():
         if self.address == self.predecessor_address or self.id == object_id or self.between(object_id, (self.predecessor_id, self.id)):
         
             # Open up the file we are going to write to
-            try:
-                os.mkdir("data")
-            except:
-                pass
-            
-            try:
-                os.mkdir("data/" + str(self.id))
-            except:
-                pass
             
             dest = open("data/" + str(self.id) + "/" + os.path.basename(path), 'wb')
             socket_request = self.context.socket(zmq.REQ)
