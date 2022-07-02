@@ -28,7 +28,7 @@ class Node():
         self.finger_table = [None for _ in range(self.size)]
         self.waiting_time_stabilize = 10
         self.waiting_time_fix_finger = 5
-        self.waiting_time_repl = 20
+        self.waiting_time_repl = 30
         self.is_leader = False
         self.hash_tags = {} # tag_id: {objects_id, objetc_path}
         self.replication = {"id" : None, "tags" : {}}
@@ -197,7 +197,6 @@ class Node():
            os.mkdir("data")
         except:
             pass
-            
         
         try:
             os.mkdir("data/" + str(self.id))
@@ -323,19 +322,38 @@ class Node():
                     self.finger_table[ index ] = self.find_successor(self.start(index), sock_req = requester)
                 countdown_fix_finger = time()
             
+            if abs (countdown_stabilize - time( ) ) > self.waiting_time_stabilize:
+                if self.predecessor_id != self.id:
+                    self.command_stabilize(sock_req = requester)
+                    if requester.make_request(json_to_send = {"command_name" : "rect", 
+                                                              "method_params" : { "predecessor_id": self.id, 
+                                                                                 "predecessor_address" : self.address }, 
+                                                              "procedence_address" : self.address, 
+                                                              "procedence_method": "thread_verify", 
+                                                              "time": time()}, 
+                                              destination_id = self.k_list[0][0], 
+                                              destination_address = self.k_list[0][1]) is requester.error:
+                        requester.action_for_error(self.k_list[0][1])
+                countdown_stabilize = time()
+            
+            
             if abs (countdown_repl - time( ) ) > self.waiting_time_repl:
                 
                 print("\n")
                 print("Replicando...\n")
                 
                 if self.predecessor_id != self.id:
-                    print("Hay más de un nodo\n")
+                    print("Hay mas de un nodo\n")
                     
                     actual_succesor = self.finger_table[0]
                         
                     if(actual_succesor[0] != self.predecessor_id):
                         
-                        print("Hay más de dos nodos\n")
+                        print("Hay mas de dos nodos\n")
+                        print(actual_succesor[0])
+                        print("\n")
+                        print(self.predecessor_id)
+                        print("\n")
                         
                         try:
                             os.mkdir("data")
@@ -356,10 +374,14 @@ class Node():
                             
                             print("Algo cambio, es necesario replicar\n")
                             
-                            if self.between(self.replication["id"], (self.predecessor_id, self.id)):
+                            if (self.replication["id"] == None or
+                                self.between(self.replication["id"], (self.predecessor_id, self.id))):
                                 print("Un nodo fue agregado, replicando...\n")
                                 self.replication = {"id" : None, "tags" : {}}
-                                os.system("rm data/" + str(self.id) + "/Replication/*")
+                                try:
+                                    os.system("rm data/" + str(self.id) + "/Replication/*")
+                                except:
+                                    print("No se pudo o hubo ningun directorio para remover")
                             
                             else:
                                 print("Un nodo fue eliminado, replicando...\n")
@@ -367,52 +389,46 @@ class Node():
                                 replication_temp_file = open("data/" + str(self.id) + "/replication_temp.txt", 'r')
                                 list_of_files = replication_temp_file.read().split("\n")
                                                             
-                                os.system("mv data/" + str(self.id) + "/Replication/* data/" + str(self.id))
+                                try:
+                                    os.system("mv data/" + str(self.id) + "/Replication/* data/" + str(self.id))
+                                except:
+                                    print("No fue posible mover los datos o no habian datos para mover")
                                 
                                 recv_json = requester.make_request(json_to_send = {"command_name" : "get_files_for_replication", 
                                                                         "method_params" : {"list_files" : list_of_files,
                                                                                         "destination_address" : self.address}, 
-                                                                        "procedence_address" : self.address, }, 
+                                                                        "procedence_address" : self.address}, 
                                                         destination_id = self.actual_succesor[0], 
                                                         destination_address = self.actual_succesor[1])
                                 
-                                os.system("rm data/" + str(self.id) + "/replication_temp.txt")
-                            
-                            recv_json = requester.make_request(json_to_send = {"command_name" : "send_files_for_replication", 
-                                                                    "method_params" : {}, 
-                                                                    "procedence_address" : self.address,}, 
-                                                    destination_id = self.predecessor_id, 
-                                                    destination_address = self.predecessor_address)
-
-                            self.replication["id"] = self.predecessor_id
+                                try:
+                                    os.system("rm data/" + str(self.id) + "/replication_temp.txt")
+                                except:
+                                    print("No se pudo o hubo ningun directorio para remover")
                             
                             recv_json = requester.make_request(json_to_send = {"command_name" : "get_tag_for_replication", 
                                                                     "method_params" : {},
-                                                                    "procedence_address" : self.address,}, 
+                                                                    "procedence_address" : self.address}, 
                                                     destination_id = self.predecessor_id, 
                                                     destination_address = self.predecessor_address)
                             
-                            self.replication["tags"] = recv_json["tags"]
+                            
+                            
+                            recv_json = requester.make_request(json_to_send = {"command_name" : "send_files_for_replication", 
+                                                                    "method_params" : {}, 
+                                                                    "procedence_address" : self.address}, 
+                                                    destination_id = self.predecessor_id, 
+                                                    destination_address = self.predecessor_address)
+
+                            print(recv_json)
+                            self.replication["id"] = self.predecessor_id
+                            
                             
                             print(self.replication)
                             print("Replicación satisfactoria.\n")
                             
                 
                 countdown_repl = time()
-            
-            if abs (countdown_stabilize - time( ) ) > self.waiting_time_stabilize:
-                if self.predecessor_id != self.id:
-                    self.command_stabilize(sock_req = requester)
-                    if requester.make_request(json_to_send = {"command_name" : "rect", 
-                                                              "method_params" : { "predecessor_id": self.id, 
-                                                                                 "predecessor_address" : self.address }, 
-                                                              "procedence_address" : self.address, 
-                                                              "procedence_method": "thread_verify", 
-                                                              "time": time()}, 
-                                              destination_id = self.k_list[0][0], 
-                                              destination_address = self.k_list[0][1]) is requester.error:
-                        requester.action_for_error(self.k_list[0][1])
-                countdown_stabilize = time()
 
     def command_stabilize(self, sock_req : request):
         print("Stabilize")                     
@@ -637,12 +653,23 @@ class Node():
                 self.sock_rep.send(stream)
     
     def get_tag_for_replication(self):
-        self.sock_rep.send_json({"response": "ACK", "tags" : self.hash_tags})
+        print("H"*500)
+        self.sock_rep.send_json({"response": "ACK", "return_info": {"tags" : self.hash_tags}})
     
     def send_files_for_replication(self, sock_req):
-        self.sock_rep.send_json({})
+        self.sock_rep.send_json({"response": "ACK", "return_info": {}})
         
-        os.system("ls ./data/" + str(self.id) + " > data/" + str(self.id) + "/replication_to_send.txt")
+        try:
+            os.mkdir("data")
+        except:
+            pass
+        
+        try:
+            os.mkdir("data/" + str(self.id))
+        except:
+            pass
+        
+        os.system("ls ./data/" + str(self.id) + " > data/" + str(self.id) + "/replication_to_send_temp.txt")
         replication_temp_file = open("data/" + str(self.id) + "/replication_to_send_temp.txt", 'r')
         list_of_files = replication_temp_file.read().split("\n")
         
@@ -655,7 +682,7 @@ class Node():
                 
                 pos.append(i)
                 
-        for i in range(len(pos), 0, -1):
+        for i in range(len(pos) - 1, 0, -1):
             del(list_of_files[i])
             
         actual_successor = self.finger_table[0]
@@ -664,8 +691,8 @@ class Node():
                                                 "method_params" : {"list_files" : list_of_files,
                                                                     "destination_address" : self.address}, 
                                                 "procedence_address" : self.address}, 
-                                destination_id = self.actual_succesor[0], 
-                                destination_address = self.actual_succesor[1])
+                                destination_id = actual_successor[0], 
+                                destination_address = actual_successor[1])
 
         os.system("rm data/" + str(self.id) + "/replication_to_send_temp.txt")
     
@@ -691,14 +718,14 @@ class Node():
             if path == "":
                 continue
             
-            dest = open("data/" + str(self.id) + "/Replication" + os.path.basename(path), 'wb')
+            dest = open("data/" + str(self.id) + "/Replication/" + os.path.basename(path), 'wb')
             socket_request = self.context.socket(zmq.REQ)
         
             socket_request.connect('tcp://' + str(destination_address))
             print('tcp://' + destination_address)
             
             # socket_request.send(path.encode())
-            self.socket_request.send_json({"command_name": "get_object", 
+            socket_request.send_json({"command_name": "get_object", 
                                            "method_params": {"path" : path}, 
                                            "procedence_addr": self.address})
                 
