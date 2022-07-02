@@ -5,6 +5,26 @@ docker build -t get-started-deployment-and-test:v1 .
 docker run --rm --name chord1 -it -P -v $(pwd):/usr/src/app get-started-deployment-and-test:v1
 docker run --rm --name chord2 -it -P -v $(pwd):/usr/src/app get-started-deployment-and-test:v1 --addr_known "172.17.0.2:8080"
 docker run --rm --name chord3 -it -P -v $(pwd):/usr/src/app get-started-deployment-and-test:v1 --addr_known "172.17.0.2:8080"
+docker run --rm --name chord4 -it -P -v $(pwd):/usr/src/app get-started-deployment-and-test:v1 --addr_known "172.17.0.2:8080"
 
 # Run client
 docker run --rm --name client -it -P -v $(pwd):/usr/src/app get-started-deployment-and-test:v1 --client
+
+# Client commands
+# Get tag
+172.17.0.2:8080 get_tag tag a
+172.17.0.2:8080 get_tag tag f
+172.17.0.2:8080 get_tag tag w
+172.17.0.2:8080 get_tag tag e
+172.17.0.2:8080 get_tag tag aa
+172.17.0.2:8080 get_tag tag ff
+
+# Send file    
+172.17.0.2:8080 recv_file path file1.mf destination_address 172.17.0.6:8080 tags [a,f,w]
+172.17.0.2:8080 recv_file path file2.mf destination_address 172.17.0.6:8080 tags [aa,f,w]
+172.17.0.2:8080 recv_file path file3.mf destination_address 172.17.0.6:8080 tags [aa,ff,w,e]
+
+# Get file
+172.17.0.2:8080 send_file path file1.mf
+172.17.0.2:8080 send_file path file2.mf
+172.17.0.2:8080 send_file path file3.mf

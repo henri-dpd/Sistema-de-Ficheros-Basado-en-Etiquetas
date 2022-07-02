@@ -101,13 +101,13 @@ class Node():
                                                           destination_address = self.predecessor_address,
                                                           destination_id = self.predecessor_id)
             
-            actual_succesor = recieved_json["return_info"]
+            actual_successor = recieved_json["return_info"]
             
             recieved_json = client_requester.make_request(json_to_send = {"command_name" : "send_files_and_tag_for_new_node",
                                                                          "method_params" : {"id": self.id}, 
                                                                          "procedence_address" : self.address}, 
-                                                          destination_address = actual_succesor[1],
-                                                          destination_id = actual_succesor[0])
+                                                          destination_address = actual_successor[1],
+                                                           destination_id = actual_successor[0])
 
             
             list_of_tags_recieved = recieved_json["return_info"]["list_of_tags_to_send"]
@@ -119,8 +119,8 @@ class Node():
             for filename in list_of_file_recieved:
                 print(filename)
                 socket_request = self.context.socket(zmq.REQ)
-                socket_request.connect('tcp://' + str(actual_succesor[1]))
-                print('tcp://' + actual_succesor[1])
+                socket_request.connect('tcp://' + str(actual_successor[1]))
+                print('tcp://' + actual_successor[1])
                 
                 socket_request.send_json({"command_name": "cut_object", 
                                          "method_params": {"path" : filename}, 
@@ -147,7 +147,7 @@ class Node():
                     if not socket_request.getsockopt(zmq.RCVMORE):
                         # If there is not more data to send, then break
                         break
-                socket_request.disconnect("tcp://" + str(actual_succesor[1]))
+                socket_request.disconnect("tcp://" + str(actual_successor[1]))
                 socket_request.close()           
         else:
             self.predecessor_address, self.predecessor_id = self.address, self.id
@@ -345,12 +345,12 @@ class Node():
                 if self.predecessor_id != self.id:
                     print("Hay mas de un nodo\n")
                     
-                    actual_succesor = self.finger_table[0]
+                    actual_successor = self.finger_table[0]
                         
-                    if(actual_succesor[0] != self.predecessor_id):
+                    if(actual_successor[0] != self.predecessor_id):
                         
                         print("Hay mas de dos nodos\n")
-                        print(actual_succesor[0])
+                        print(actual_successor[0])
                         print("\n")
                         print(self.predecessor_id)
                         print("\n")
@@ -385,6 +385,7 @@ class Node():
                             
                             else:
                                 print("Un nodo fue eliminado, replicando...\n")
+                                
                                 os.system("ls ./data/" + str(self.id) + "/Replication > data/" + str(self.id) + "/replication_temp.txt")
                                 replication_temp_file = open("data/" + str(self.id) + "/replication_temp.txt", 'r')
                                 list_of_files = replication_temp_file.read().split("\n")
@@ -393,13 +394,26 @@ class Node():
                                     os.system("mv data/" + str(self.id) + "/Replication/* data/" + str(self.id))
                                 except:
                                     print("No fue posible mover los datos o no habian datos para mover")
+                                    
+                                pos = []
+                                
+                                for i in range(len(list_of_files)):
+                                    if (list_of_files[i] == "Replication" or
+                                        list_of_files[i] == "" or
+                                        list_of_files[i] == "replication_to_send_temp.txt" or
+                                        list_of_files[i] == "replication_temp.txt"):
+                                        
+                                        pos.append(i)
+                                        
+                                for i in range(len(pos) - 1, -1, -1):
+                                    del(list_of_files[pos[i]])
                                 
                                 recv_json = requester.make_request(json_to_send = {"command_name" : "get_files_for_replication", 
                                                                         "method_params" : {"list_files" : list_of_files,
                                                                                         "destination_address" : self.address}, 
                                                                         "procedence_address" : self.address}, 
-                                                        destination_id = self.actual_succesor[0], 
-                                                        destination_address = self.actual_succesor[1])
+                                                        destination_id = actual_successor[0], 
+                                                        destination_address = actual_successor[1])
                                 
                                 try:
                                     os.system("rm data/" + str(self.id) + "/replication_temp.txt")
@@ -426,7 +440,10 @@ class Node():
                             
                             print(self.replication)
                             print("Replicación satisfactoria.\n")
-                            
+                        else:
+                            print("a" * 400)
+                            print("\n")
+                            print("No fue necesario Replicar")    
                 
                 countdown_repl = time()
 
@@ -653,7 +670,6 @@ class Node():
                 self.sock_rep.send(stream)
     
     def get_tag_for_replication(self):
-        print("H"*500)
         self.sock_rep.send_json({"response": "ACK", "return_info": {"tags" : self.hash_tags}})
     
     def send_files_for_replication(self, sock_req):
@@ -678,12 +694,13 @@ class Node():
         for i in range(len(list_of_files)):
             if (list_of_files[i] == "Replication" or
                 list_of_files[i] == "" or
-                list_of_files[i] == "replication_to_send_temp.txt"):
+                list_of_files[i] == "replication_to_send_temp.txt" or
+                list_of_files[i] == "replication_temp.txt"):
                 
                 pos.append(i)
                 
-        for i in range(len(pos) - 1, 0, -1):
-            del(list_of_files[i])
+        for i in range(len(pos) - 1, -1, -1):
+            del(list_of_files[pos[i]])
             
         actual_successor = self.finger_table[0]
         

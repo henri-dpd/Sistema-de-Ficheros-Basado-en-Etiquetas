@@ -38,10 +38,6 @@ class client:
                 self.sock_req.disconnect("tcp://"+ info["return_info"]["address"])
                 
             
-
-    # 172.17.0.2:8080 send_file path file1.mf
-    # 172.17.0.2:8080 send_file path file2.mf
-    # 172.17.0.2:8080 send_file path file3.mf
     def get_file(self, path):
         # Open up the file we are going to write to
         
@@ -61,17 +57,6 @@ class client:
                 break
         print("recived") 
     
-    # 172.17.0.2:8080 get_tag tag a
-    # 172.17.0.2:8080 get_tag tag f
-    # 172.17.0.2:8080 get_tag tag w
-    # 172.17.0.2:8080 get_tag tag e
-    # 172.17.0.2:8080 get_tag tag aa
-    # 172.17.0.2:8080 get_tag tag ff
-    #get_tag
-    
-    # 172.17.0.2:8080 recv_file path file1.mf destination_address 172.17.0.3:8080 tags [a,f,w]
-    # 172.17.0.2:8080 recv_file path file2.mf destination_address 172.17.0.3:8080 tags [aa,f,w]
-    # 172.17.0.2:8080 recv_file path file3.mf destination_address 172.17.0.3:8080 tags [aa,ff,w,e]
     def send_file(self, path):
         recv = self.sock_rep.recv()
         # Verify that the file is available
