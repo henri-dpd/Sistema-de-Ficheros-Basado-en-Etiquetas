@@ -56,13 +56,15 @@ class Node():
                          "get_files_for_replication": self.get_files_for_replication,
                          "send_files_for_replication": self.send_files_for_replication,
                          "get_tag_for_replication": self.get_tag_for_replication,
-                         "send_tags_for_replication" : self.send_tags_for_replication
+                         "send_tags_for_replication" : self.send_tags_for_replication,
+                         "delete_object_from_replication" : self.delete_object_from_replication,
+                         "delete_tags_from_replication" : self.delete_tags_from_replication
                          }
 
         self.commands_request = {"rect", "stabilize", "find_successor", "find_predecessor", 
                                  "closest_predecessor_fing", "recv_file","get_tag", "send_file",
                                  "send_files_and_tag_for_new_node", "send_files_for_replication",
-                                 "recv_tag"}
+                                 "recv_tag", "cut_object"}
         
         try:
             os.mkdir("data")
@@ -148,7 +150,7 @@ class Node():
                 socket_request.connect('tcp://' + str(actual_successor[1]))
                 print('tcp://' + actual_successor[1])
                 
-                socket_request.send_json({"command_name": "cut_object", 
+                socket_request.send_json({"command_name": "cut_object",
                                          "method_params": {"path" : filename}, 
                                          "procedence_addr": self.address})
                 
@@ -210,7 +212,6 @@ class Node():
     
     def send_files_and_tag_for_new_node(self, id, sock_req):
         
-        
         os.system("ls ./data/" + str(self.id) + " > data/" + str(self.id) + "/temp.txt")
         temp_file = open("data/" + str(self.id) + "/temp.txt", 'r')
         
@@ -247,7 +248,20 @@ class Node():
         os.system("rm data/" + str(self.id) + "/temp.txt")
         self.sock_rep.send_json({"response": "ACK", "return_info": {"list_of_tags_to_send" : list_of_tags_to_send,
                                                                     "list_of_file_to_send" : list_of_file_to_send},
-                                 "procedence_addr": self.address } )
+                                 "procedence_addr": self.address })
+        
+        successor = self.finger_table[0]
+        
+        recv_json = sock_req.make_request(json_to_send = {'command_name': 'delete_tags_from_replication', 
+                                                                'method_params': {'tags': list_of_tags_to_send}}, 
+                                                requester_object= self, 
+                                                destination_id = successor[0],
+                                                destination_address = successor[1])
+        
+    def delete_tags_from_replication(self, tags):
+        self.sock_rep.send_json({})
+        for tag in tags:
+            del(self.replication["tags"][int(tag)])
 
 
     def command_find_predecessor(self, id, sock_req):
@@ -754,7 +768,7 @@ class Node():
             socket_request.disconnect("tcp://" + str(destination_address))
             socket_request.close()
     
-    def cut_file(self, path):
+    def cut_file(self, path, sock_req):
         # Verify that the file is available
         
         if not os.path.isfile("data/" + str(self.id) + "/" + path):
@@ -784,6 +798,20 @@ class Node():
         if os.path.exists("data/" + str(self.id) + "/" + path):
             os.system("rm " + "data/" + str(self.id) + "/" + path)
             print('Archivo borrado con exito.')
+
+            successor = self.finger_table[0]
+            
+            recv_json = sock_req.make_request(json_to_send = {'command_name': 'delete_object_from_replication', 
+                                                              'method_params': {'path': path}},  
+                                            destination_id = successor[0], 
+                                            destination_address = successor[1])
+            
+            
+    def delete_object_from_replication(self, path):
+        self.sock_rep.send_json({})
+        if os.path.exists("data/" + str(self.id) + "/Replication/" + path):
+            os.system("rm " + "data/" + str(self.id) + "/Replication/" + path)
+        
             
 
     def command_recv_file(self, path, destination_address, tags, sock_req):
