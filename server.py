@@ -116,7 +116,12 @@ class Node():
             list_of_file_recieved = recieved_json["return_info"]["list_of_file_to_send"]
             
             for tag in list_of_tags_recieved:
-                self.hash_tags[tag]= list_of_tags_recieved[tag]
+                if tag in self.hash_tags:
+                    for path_id in tag:
+                        self.hash_tags[tag][path_id] = list_of_tags_recieved[tag][path_id]
+                else:
+                    self.hash_tags[tag] = list_of_tags_recieved[tag]
+                
             
             for filename in list_of_file_recieved:
                 print(filename)
@@ -430,10 +435,19 @@ class Node():
                                                         destination_id = actual_successor[0], 
                                                         destination_address = actual_successor[1])
                                 
+                                #print("H" * 1000)
+                                #print(self.replication)
+                                #print(self.hash_tags)
                                 for tag in self.replication["tags"]:
-                                    self.hash_tags[tag] = self.replication[tag]
+                                    #print(tag)
+                                    if tag in self.hash_tags:
+                                        for path_id in tag:
+                                            self.hash_tags[tag][path_id] = self.replication["tags"][tag][path_id]
+                                    else:
+                                        self.hash_tags[tag] = self.replication["tags"][tag]
+                                
                                     
-                                self.replication["tag"] = {}
+                                self.replication["tags"] = {}
                                 
                                 try:
                                     os.system("rm data/" + str(self.id) + "/replication_temp.txt")
@@ -692,7 +706,7 @@ class Node():
     def send_tags_for_replication(self, list_tags):
         self.sock_rep.send_json({"response": "ACK", "return_info": {}})
         for tag in list_tags:
-            if not tag in self.replication["tags"]:
+            if not int(tag) in self.replication["tags"]:
                 self.replication["tags"][int(tag)] = {}
             for key in list_tags[tag]:
                 self.replication["tags"][int(tag)][int(key)] = list_tags[tag][key]
