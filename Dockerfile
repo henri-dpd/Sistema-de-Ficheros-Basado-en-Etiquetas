@@ -7,6 +7,7 @@ COPY . .
 
 #RUN Step
 RUN pip install pyzmq
+RUN pip install pyqt5
 
 
 EXPOSE 8080

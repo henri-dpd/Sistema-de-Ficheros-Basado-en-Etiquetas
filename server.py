@@ -30,7 +30,7 @@ class Node():
         self.waiting_time_fix_finger = 5
         self.waiting_time_repl = 30
         self.is_leader = False
-        self.hash_tags = {} # tag_id: {objects_id, objetc_path}
+        self.hash_tags = {} # tag_id: {objects_id: objetc_path}
         self.replication = {"id" : None, "tags" : {}}
         
         self.commands = {"join": self.command_join, 
@@ -55,12 +55,14 @@ class Node():
                          "send_files_and_tag_for_new_node" : self.send_files_and_tag_for_new_node,
                          "get_files_for_replication": self.get_files_for_replication,
                          "send_files_for_replication": self.send_files_for_replication,
-                         "get_tag_for_replication": self.get_tag_for_replication
+                         "get_tag_for_replication": self.get_tag_for_replication,
+                         "send_tags_for_replication" : self.send_tags_for_replication
                          }
 
         self.commands_request = {"rect", "stabilize", "find_successor", "find_predecessor", 
                                  "closest_predecessor_fing", "recv_file","get_tag", "send_file",
-                                 "send_files_and_tag_for_new_node", "send_files_for_replication"}
+                                 "send_files_and_tag_for_new_node", "send_files_for_replication",
+                                 "recv_tag"}
 
         print("Started node ", (self.id, self.address))
         client_requester = request(context = self.context)
@@ -374,8 +376,14 @@ class Node():
                             
                             print("Algo cambio, es necesario replicar\n")
                             
+                            # Si el nodo al que replicábamos cambio, puede haber ocurrido
+                            # una de dos cosas, o desapareció, lo cual indica que ahora el id
+                            # del predecesor es menor que el que tenemos en Replication,
+                            # o se agregó uno en medio, el cuál tendrá mayor id que el que
+                            # estábamos replicando
                             if (self.replication["id"] == None or
-                                self.between(self.replication["id"], (self.predecessor_id, self.id))):
+                                self.between(self.predecessor_id, (self.replication["id"], self.id))):
+                                
                                 print("Un nodo fue agregado, replicando...\n")
                                 self.replication = {"id" : None, "tags" : {}}
                                 try:
@@ -415,6 +423,18 @@ class Node():
                                                         destination_id = actual_successor[0], 
                                                         destination_address = actual_successor[1])
                                 
+                                
+                                recv_json = requester.make_request(json_to_send = {"command_name" : "send_tags_for_replication", 
+                                                                        "method_params" : {"list_tags" : self.replication["tags"]}, 
+                                                                        "procedence_address" : self.address}, 
+                                                        destination_id = actual_successor[0], 
+                                                        destination_address = actual_successor[1])
+                                
+                                for tag in self.replication["tags"]:
+                                    self.hash_tags[tag] = self.replication[tag]
+                                    
+                                self.replication["tag"] = {}
+                                
                                 try:
                                     os.system("rm data/" + str(self.id) + "/replication_temp.txt")
                                 except:
@@ -437,13 +457,13 @@ class Node():
                             print(recv_json)
                             self.replication["id"] = self.predecessor_id
                             
-                            
-                            print(self.replication)
-                            print("Replicación satisfactoria.\n")
+                            print("Replicación satisfactoria. \n")
                         else:
-                            print("a" * 400)
-                            print("\n")
-                            print("No fue necesario Replicar")    
+                            print("No fue necesario Replicar. \n")
+                
+                print("A" *100)
+                print(self.replication)
+                print("B"* 100)
                 
                 countdown_repl = time()
 
@@ -668,6 +688,15 @@ class Node():
             else:
                 # Finish it off
                 self.sock_rep.send(stream)
+
+    def send_tags_for_replication(self, list_tags):
+        self.sock_rep.send_json({"response": "ACK", "return_info": {}})
+        for tag in list_tags:
+            if not tag in self.replication["tags"]:
+                self.replication["tags"][int(tag)] = {}
+            for key in list_tags[tag]:
+                self.replication["tags"][int(tag)][int(key)] = list_tags[tag][key]
+        
     
     def get_tag_for_replication(self):
         self.sock_rep.send_json({"response": "ACK", "return_info": {"tags" : self.hash_tags}})
@@ -837,11 +866,14 @@ class Node():
                     break
             socket_request.disconnect("tcp://" + str(destination_address))
             socket_request.close()
+            
             tags = tags[1:len(tags)-1].split(",")
             for tag in tags:
                 tag_id = int(hashlib.sha1(bytes(tag, 'utf-8') ).hexdigest(),16)
                 if self.address == self.predecessor_address or self.id == object_id or self.between(tag_id, (self.predecessor_id, self.id)):
-                    self.recv_tag(path, object_id, tag_id)
+                    # Agregamos la etiqueta actual a las nuestras
+                    self.recv_tag(path, object_id, tag_id, sock_req)
+                    
                 else:
                     destination_id, new_destination_address = self.find_successor(tag_id, sock_req)
                     recv_json = sock_req.make_request(json_to_send = {'command_name': 'recv_tag', 
@@ -852,8 +884,19 @@ class Node():
                                                                       "procedence_method": "recv_file"}, 
                                                       requester_object= self, 
                                                       destination_id = destination_id, 
-                                                      destination_address = new_destination_address )            
-            return
+                                                      destination_address = new_destination_address )
+            
+            actual_successor = self.finger_table[0]
+            
+            list_of_files = [path]
+            
+            recv_json = sock_req.make_request(json_to_send = {"command_name" : "get_files_for_replication", 
+                                                                        "method_params" : {"list_files" : list_of_files,
+                                                                                        "destination_address" : self.address}, 
+                                                                        "procedence_address" : self.address}, 
+                                                        destination_id = actual_successor[0], 
+                                                        destination_address = actual_successor[1])
+            
         else:
             destination_id, new_destination_address = self.find_successor(object_id, sock_req)
             recv_json = sock_req.make_request(json_to_send = {'command_name': 'recv_file', 
@@ -866,18 +909,31 @@ class Node():
                                                       destination_id = destination_id, 
                                                       destination_address = new_destination_address )
 
-    def command_recv_tag(self, path, path_id, tag_id):
-        self.recv_tag(path, path_id, tag_id)
+    def command_recv_tag(self, path, path_id, tag_id, sock_req):
+        self.recv_tag(path, path_id, tag_id, sock_req)
         print("Objeto " + str(path_id) + " guardado en " + str(tag_id))
         self.sock_rep.send_json({"response": "ACK", "return_info": {}})
 
-    def recv_tag(self, path, path_id, tag_id):
+    def recv_tag(self, path, path_id, tag_id, sock_req):
         if tag_id in self.hash_tags:
             if path_id in self.hash_tags[tag_id]:
                 return
             self.hash_tags[tag_id][path_id] = path
         else:
             self.hash_tags[tag_id] = {path_id : path}
+        
+        # Enviamos dicha etiqueta al sucesor para la replicación
+
+        actual_successor = self.finger_table[0]
+
+        list_of_tags = {tag_id : {path_id:path}}
+        
+        recv_json = sock_req.make_request(json_to_send = {"command_name" : "send_tags_for_replication", 
+                                                                    "method_params" : {"list_tags" : list_of_tags}, 
+                                                                    "procedence_address" : self.address}, 
+                                                    destination_id = actual_successor[0], 
+                                                    destination_address = actual_successor[1])
+
         
     def command_update_predecessor(self, predecessor_id, predecessor_address):
         print("entro comando get predecessor")
