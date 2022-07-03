@@ -38,10 +38,9 @@ class client:
                 self.get_file(params["path"])
                 self.sock_req.disconnect("tcp://"+ info["return_info"]["address"])
                 
-            
+    
     def get_file(self, path):
-        # Open up the file we are going to write to
-        
+        # Abrimos el fichero en el que vamos a escribir
         try:
             os.mkdir("recv_client_data")
         except:
@@ -50,18 +49,20 @@ class client:
         dest = open("recv_client_data/" + os.path.basename(path), 'wb')
         print("Recibiendo data")
         while True:
-            # Start grabing data
+            # Comenzamos a recibir la data
             data = self.sock_req.recv()
-            # Write the chunk to the file
+
+            # Escribimos en el file
             dest.write(data)
+            
             if not self.sock_req.getsockopt(zmq.RCVMORE):
                 break
         print("recived") 
     
     def send_file(self, path):
         recv = self.sock_rep.recv()
-        # Verify that the file is available
         
+        # Crea la carpeta si  no existe
         try:
             os.mkdir("client_data")
         except:
@@ -73,21 +74,19 @@ class client:
         
         print("Leyendo datos")
         
-        # Open the file for reading
         fn = open("client_data/" + path, 'rb')
         stream = True
         
-        # Start reading in the file
         print("Enviando datos")
         
         while stream:
-            # Read the file bit by bit
+            # Leer 128 bits
             stream = fn.read(128)
             if stream:
-                # If the stream has more to send then send more
+                # Si no ha terminado de leer el archivo
                 self.sock_rep.send(stream, zmq.SNDMORE)
             else:
-                # Finish it off
+                # Ultimos bits leídos del archivo
                 self.sock_rep.send(stream)   
         return "finished"
 

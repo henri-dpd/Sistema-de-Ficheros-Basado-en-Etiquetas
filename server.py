@@ -26,9 +26,9 @@ class Node():
         self.k_list = [(self.id, self.address) for _ in range(self.k)]
         self.finger_table_length = int(math.log2(self.size))
         self.finger_table = [None for _ in range(self.size)]
-        self.waiting_time_stabilize = 10
-        self.waiting_time_fix_finger = 5
-        self.waiting_time_repl = 30
+        self.waiting_time_stabilize = 3
+        self.waiting_time_fix_finger = 0.5
+        self.waiting_time_repl = 10
         self.is_leader = False
         self.hash_tags = {} # tag_id: {objects_id: objetc_path}
         self.replication = {"id" : None, "tags" : {}}
@@ -151,13 +151,6 @@ class Node():
         self.execute(client_requester)
         
     def try_to_get_files(self, list_of_file_recieved, actual_successor):    
-        
-        print("lalala" * 100)
-        print(list_of_file_recieved)
-        print("\n")
-        print(actual_successor)
-        print("\n")
-        
         for filename in list_of_file_recieved:
             print(filename)
             socket_request = self.context.socket(zmq.REQ)
@@ -173,13 +166,11 @@ class Node():
 
             print("Comenzar a leer")
             while True:
-                # Start grabing data
+                # Comenzamos a recibir la data
                 data = socket_request.recv()
-                print(data)
-                # Write the chunk to the file
+                # escribe en el fichero abierto
                 dest.write(data)
                 if not socket_request.getsockopt(zmq.RCVMORE):
-                    # If there is not more data to send, then break
                     break
             
             print("Termino de leer")
@@ -376,11 +367,7 @@ class Node():
                 countdown_stabilize = time()
             
             
-            if abs (countdown_repl - time( ) ) > self.waiting_time_repl:
-                
-                print("\n")
-                print("Replicando...\n")
-                
+            if abs (countdown_repl - time( ) ) > self.waiting_time_repl:                
                 if self.predecessor_id != self.id:
                     print("Hay mas de un nodo\n")
                     
@@ -388,12 +375,7 @@ class Node():
                         
                     if(actual_successor[0] != self.predecessor_id):
                         
-                        print("Hay mas de dos nodos\n")
-                        print(actual_successor[0])
-                        print("\n")
-                        print(self.predecessor_id)
-                        print("\n")
-                        
+                        print("Hay mas de dos nodos\n")    
                     
                         if self.replication["id"] != self.predecessor_id:
                             
@@ -453,11 +435,8 @@ class Node():
                                                         destination_id = actual_successor[0], 
                                                         destination_address = actual_successor[1])
                                 
-                                #print("H" * 1000)
-                                #print(self.replication)
-                                #print(self.hash_tags)
+                                
                                 for tag in self.replication["tags"]:
-                                    #print(tag)
                                     if tag in self.hash_tags:
                                         for path_id in tag:
                                             self.hash_tags[tag][path_id] = self.replication["tags"][tag][path_id]
@@ -497,9 +476,7 @@ class Node():
                         else:
                             print("No fue necesario Replicar. \n")
                 
-                print("A" *100)
                 print(self.replication)
-                print("B"* 100)
                 
                 countdown_repl = time()
 
@@ -543,7 +520,6 @@ class Node():
                                                              destination_address = recv_json_predecessor['return_info'][ 'predecessor_address'])
             if not recv_json_pred_k_list is sock_req.error:
                 
-                #If it's true that self has a new succesor and this new sucstabcesor is alive, then self has to actualize its k_list    
                 self.k_list = [[recv_json_predecessor['return_info']['predecessor_id'], 
                                 recv_json_predecessor['return_info']['predecessor_address']]] + recv_json_pred_k_list['return_info']['k_list'][:-1]                                       
             else:
@@ -586,7 +562,6 @@ class Node():
             buffer = self.sock_rep.recv_json()
 
             if buffer['command_name'] in self.commands:
-                
                 print(buffer)
                 if buffer['command_name'] in self.commands_request:
                     print("comando con request: " + str(buffer['command_name']))
@@ -649,7 +624,6 @@ class Node():
     
     
     def command_get_tag(self, tag, sock_req):
-        print("hola")
         tag_id = int(hashlib.sha1(bytes(tag, 'utf-8') ).hexdigest(),16)
         if self.address == self.predecessor_address or self.id == tag_id or self.between(tag_id, (self.predecessor_id, self.id)):
             tags_object_id = self.get_tag(tag_id)
@@ -693,27 +667,21 @@ class Node():
     def send_file(self, path):
         
         if not os.path.isfile("data/" + str(self.id) + "/" + path):
-            print("data/" + str(self.id) + "/" + path)
             self.sock_rep.send(b'')
             return
         
         print("Existe el archivo")
         
-        # Open the file for reading
         fn = open("data/" + str(self.id) + "/" + path, 'rb')
         stream = True
         
         print("Enviando data")
         
-        # Start reading in the file
         while stream:
-            # Read the file bit by bit
             stream = fn.read(128)
             if stream:
-                # If the stream has more to send then send more
                 self.sock_rep.send(stream, zmq.SNDMORE)
             else:
-                # Finish it off
                 self.sock_rep.send(stream)
 
     def send_tags_for_replication(self, list_tags):
@@ -773,25 +741,19 @@ class Node():
             socket_request.connect('tcp://' + str(destination_address))
             print('tcp://' + destination_address)
             
-            # socket_request.send(path.encode())
             socket_request.send_json({"command_name": "get_object", 
                                            "method_params": {"path" : path}, 
                                            "procedence_addr": self.address})
                 
             while True:
-                # Start grabing data
                 data = socket_request.recv()
-                # Write the chunk to the file
                 dest.write(data)
                 if not socket_request.getsockopt(zmq.RCVMORE):
-                    # If there is not more data to send, then break
                     break
             socket_request.disconnect("tcp://" + str(destination_address))
             socket_request.close()
     
     def cut_file(self, path, sock_req):
-        # Verify that the file is available
-        
         if not os.path.isfile("data/" + str(self.id) + "/" + path):
             print("data/" + str(self.id) + "/" + path)
             self.sock_rep.send(b'')
@@ -799,20 +761,15 @@ class Node():
         
         print("Existe el archivo")
         
-        # Open the file for reading
         fn = open("data/" + str(self.id) + "/" + path, 'rb')
         stream = True
         print("Enviando data")
         
-        # Start reading in the file
         while stream:
-            # Read the file bit by bit
             stream = fn.read(128)
             if stream:
-                # If the stream has more to send then send more
                 self.sock_rep.send(stream, zmq.SNDMORE)
             else:
-                # Finish it off
                 self.sock_rep.send(stream)
         
         #Ahora borrar el archivo
@@ -842,25 +799,19 @@ class Node():
         
         if self.address == self.predecessor_address or self.id == object_id or self.between(object_id, (self.predecessor_id, self.id)):
         
-            # Open up the file we are going to write to
-            
             dest = open("data/" + str(self.id) + "/" + os.path.basename(path), 'wb')
             socket_request = self.context.socket(zmq.REQ)
         
             socket_request.connect('tcp://' + str(destination_address))
             print('tcp://' + destination_address)
-            # send the desired file to the server
             socket_request.send(path.encode())
             print("Yo: " + str(self.address) + str(self.id))
             print("Guardo objeto: " + str(path))
 
             while True:
-                # Start grabing data
                 data = socket_request.recv()
-                # Write the chunk to the file
                 dest.write(data)
                 if not socket_request.getsockopt(zmq.RCVMORE):
-                    # If there is not more data to send, then break
                     break
             socket_request.disconnect("tcp://" + str(destination_address))
             socket_request.close()
@@ -871,7 +822,6 @@ class Node():
                 if self.address == self.predecessor_address or self.id == object_id or self.between(tag_id, (self.predecessor_id, self.id)):
                     # Agregamos la etiqueta actual a las nuestras
                     self.recv_tag(path, object_id, tag_id, sock_req)
-                    
                 else:
                     destination_id, new_destination_address = self.find_successor(tag_id, sock_req)
                     recv_json = sock_req.make_request(json_to_send = {'command_name': 'recv_tag', 

@@ -1,27 +1,27 @@
-# Build image
+# Construir imagen
 docker build -t get-started-deployment-and-test:v1 .
 
-# Run nodes
+# Correr nodos
 docker run --rm --name chord1 -it -P -v $(pwd):/usr/src/app get-started-deployment-and-test:v1
 docker run --rm --name chord2 -it -P -v $(pwd):/usr/src/app get-started-deployment-and-test:v1 --addr_known "172.17.0.2:8080"
 docker run --rm --name chord3 -it -P -v $(pwd):/usr/src/app get-started-deployment-and-test:v1 --addr_known "172.17.0.2:8080"
 docker run --rm --name chord4 -it -P -v $(pwd):/usr/src/app get-started-deployment-and-test:v1 --addr_known "172.17.0.2:8080"
 
-# Run client
+# Correr clientes
 docker run --rm --name client -it -P -v $(pwd):/usr/src/app get-started-deployment-and-test:v1 --client
 
-# Client commands
-# Send file    
+# Comandos del cliente #
+# Enviar archivos
 172.17.0.2:8080 recv_file path file1.mf destination_address 172.17.0.5:8080 tags [a,f,w]
 172.17.0.2:8080 recv_file path file2.mf destination_address 172.17.0.5:8080 tags [aa,f,w]
 172.17.0.2:8080 recv_file path file3.mf destination_address 172.17.0.5:8080 tags [aa,ff,w,e]
 
-# Get file
+# Recibir archivos
 172.17.0.2:8080 send_file path file1.mf
 172.17.0.2:8080 send_file path file2.mf
 172.17.0.2:8080 send_file path file3.mf
 
-# Get tag
+# Obtener nombre de los archivos asociados a una etiqueta
 172.17.0.2:8080 get_tag tag a
 172.17.0.2:8080 get_tag tag f
 172.17.0.2:8080 get_tag tag w

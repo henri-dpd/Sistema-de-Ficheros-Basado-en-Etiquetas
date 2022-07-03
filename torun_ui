@@ -8,7 +8,7 @@ docker run --rm --name chord3 -it -P -v $(pwd):/usr/src/app get-started-deployme
 docker run --rm --name chord4 -it -P -v $(pwd):/usr/src/app get-started-deployment-and-test:v1 --addr_known "172.17.0.2:8080"
 
 # Run client
-docker run --rm --name client -it -P -v $(pwd):/usr/src/appZZ get-started-deployment-and-test:v1 --client
+docker run --rm --name client -it -P -v $(pwd):/usr/src/app get-started-deployment-and-test:v1 --client
 # docker run --rm --name client -it -P -v $(pwd):/usr/src/app -v /tmp/.X11-unix:/tmp/.X11-unix -e DISPLAY=$DISPLAY -u myusername --group-add audio --device /dev/snd get-started-deployment-and-test:v1 --client
 
 # Client commands
