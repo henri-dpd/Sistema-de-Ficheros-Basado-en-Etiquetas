@@ -142,36 +142,50 @@ class Node():
                         self.hash_tags[tag][path_id] = list_of_tags_recieved[tag][path_id]
                 else:
                     self.hash_tags[tag] = list_of_tags_recieved[tag]
-                
             
-            for filename in list_of_file_recieved:
-                print(filename)
-                socket_request = self.context.socket(zmq.REQ)
-                socket_request.connect('tcp://' + str(actual_successor[1]))
-                print('tcp://' + actual_successor[1])
-                
-                socket_request.send_json({"command_name": "cut_object",
-                                         "method_params": {"path" : filename}, 
-                                         "procedence_addr": self.address})
-                
-                
-                dest = open("data/" + str(self.id) + "/" + filename, 'wb')
-                
-
-                while True:
-                    # Start grabing data
-                    data = socket_request.recv()
-                    # Write the chunk to the file
-                    dest.write(data)
-                    if not socket_request.getsockopt(zmq.RCVMORE):
-                        # If there is not more data to send, then break
-                        break
-                socket_request.disconnect("tcp://" + str(actual_successor[1]))
-                socket_request.close()           
+            self.try_to_get_files(list_of_file_recieved, actual_successor)    
+                       
         else:
             self.predecessor_address, self.predecessor_id = self.address, self.id
             self.is_leader = True
         self.execute(client_requester)
+        
+    def try_to_get_files(self, list_of_file_recieved, actual_successor):    
+        
+        print("lalala" * 100)
+        print(list_of_file_recieved)
+        print("\n")
+        print(actual_successor)
+        print("\n")
+        
+        for filename in list_of_file_recieved:
+            print(filename)
+            socket_request = self.context.socket(zmq.REQ)
+            socket_request.connect('tcp://' + str(actual_successor[1]))
+            print('tcp://' + actual_successor[1])
+            
+            
+            dest = open("data/" + str(self.id) + "/" + filename, 'wb')
+            
+            socket_request.send_json({"command_name": "cut_object",
+                                        "method_params": {"path" : filename}, 
+                                        "procedence_addr": self.address})
+
+            print("Comenzar a leer")
+            while True:
+                # Start grabing data
+                data = socket_request.recv()
+                print(data)
+                # Write the chunk to the file
+                dest.write(data)
+                if not socket_request.getsockopt(zmq.RCVMORE):
+                    # If there is not more data to send, then break
+                    break
+            
+            print("Termino de leer")
+            socket_request.disconnect("tcp://" + str(actual_successor[1]))
+            socket_request.close()
+            
         
     def get_node_hash(self, address):
         summ = ''
