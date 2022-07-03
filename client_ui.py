@@ -10,33 +10,28 @@ class client:
         self.sock_req = self.context.socket(zmq.REQ)
         self.sock_rep = self.context.socket(zmq.REP)
         self.sock_rep.bind("tcp://" + address) 
-        self.send_info()
         
 
-    def send_info(self):
-        while True:
-            buffer = input().split()
-            print(buffer)
-            self.sock_req.connect("tcp://"+ buffer[0])
-            
-            params = {buffer[i] : buffer[i + 1] for i in range(2, len(buffer), 2) }     
-
-            print({"command_name": buffer[1], "method_params": params , "procedence_addr": self.address})                
-            self.sock_req.send_json({"command_name": buffer[1], "method_params": params , "procedence_addr": self.address})
-            if buffer[1] == "recv_file":
-                self.sock_req.recv_json()
-                info = self.send_file(params["path"])
-            else:
-                info = self.sock_req.recv_json()
-            print(info)
-            self.sock_req.disconnect("tcp://"+ buffer[0])
-            
-            if buffer[1] == "send_file":
-                print("get file")
-                self.sock_req.connect("tcp://"+ info["return_info"]["address"])
-                self.sock_req.send_json({"command_name": "get_object", "method_params": {"path" : params["path"]}, "procedence_addr": self.address})
-                self.get_file(params["path"])
-                self.sock_req.disconnect("tcp://"+ info["return_info"]["address"])
+    def send_info(self, ip, command, params):
+        
+        self.sock_req.connect("tcp://"+ ip)
+        
+        print({"command_name": command, "method_params": params , "procedence_addr": self.address})                
+        self.sock_req.send_json({"command_name": command, "method_params": params , "procedence_addr": self.address})
+        if command == "recv_file":
+            self.sock_req.recv_json()
+            info = self.send_file(params["path"])
+        else:
+            info = self.sock_req.recv_json()
+        print(info)
+        self.sock_req.disconnect("tcp://"+ ip)
+        
+        if command == "send_file":
+            print("get file")
+            self.sock_req.connect("tcp://"+ info["return_info"]["address"])
+            self.sock_req.send_json({"command_name": "get_object", "method_params": {"path" : params["path"]}, "procedence_addr": self.address})
+            self.get_file(params["path"])
+            self.sock_req.disconnect("tcp://"+ info["return_info"]["address"])
                 
             
     def get_file(self, path):

@@ -137,11 +137,11 @@ class Node():
             list_of_file_recieved = recieved_json["return_info"]["list_of_file_to_send"]
             
             for tag in list_of_tags_recieved:
-                if tag in self.hash_tags:
+                if int(tag) in self.hash_tags:
                     for path_id in tag:
-                        self.hash_tags[tag][path_id] = list_of_tags_recieved[tag][path_id]
+                        self.hash_tags[int(tag)][int(path_id)] = list_of_tags_recieved[tag][path_id]
                 else:
-                    self.hash_tags[tag] = list_of_tags_recieved[tag]
+                    self.hash_tags[int(tag)] = list_of_tags_recieved[tag]
             
             self.try_to_get_files(list_of_file_recieved, actual_successor)    
                        
@@ -329,6 +329,9 @@ class Node():
         return (self.id, self.address)
 
     def between(self, id, interval):
+        if interval == None or id == None:
+            return None
+        
         if interval[0] < interval[1]:
             return id > interval[0] and id < interval[1] 
         return id > interval[0] or id < interval[1]

@@ -1,0 +1,18 @@
+FROM python:3.7-slim
+
+WORKDIR /usr/src/app
+
+#Adding files.
+COPY . .
+
+#RUN Step
+RUN apt-get update && apt-get install -y python3-opencv
+RUN pip install opencv-python
+RUN pip install pyzmq
+RUN pip install pyqt5
+
+
+EXPOSE 8080
+
+#Default running
+ENTRYPOINT ["python", "main.py"] 
