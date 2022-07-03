@@ -472,22 +472,26 @@ class Node():
                                 except:
                                     print("No se pudo o hubo ningun directorio para remover")
                             
-                            recv_json = requester.make_request(json_to_send = {"command_name" : "get_tag_for_replication", 
-                                                                    "method_params" : {},
-                                                                    "procedence_address" : self.address}, 
-                                                    destination_id = self.predecessor_id, 
-                                                    destination_address = self.predecessor_address)
-                            
-                            
                             
                             recv_json = requester.make_request(json_to_send = {"command_name" : "send_files_for_replication", 
                                                                     "method_params" : {}, 
                                                                     "procedence_address" : self.address}, 
                                                     destination_id = self.predecessor_id, 
                                                     destination_address = self.predecessor_address)
+                            
+                            
+                            recv_json = requester.make_request(json_to_send = {"command_name" : "get_tag_for_replication", 
+                                                                    "method_params" : {},
+                                                                    "procedence_address" : self.address}, 
+                                                    destination_id = self.predecessor_id, 
+                                                    destination_address = self.predecessor_address)
+                            
+                            self.replication["id"] = self.predecessor_id
+                            self.replication["tags"] = recv_json["return_info"]["tags"]
+                            
 
                             print(recv_json)
-                            self.replication["id"] = self.predecessor_id
+                            
                             
                             print("Replicación satisfactoria. \n")
                         else:

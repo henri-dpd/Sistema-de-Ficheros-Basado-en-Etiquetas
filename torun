@@ -22,9 +22,9 @@ docker run --rm --name client -it -P -v $(pwd):/usr/src/app get-started-deployme
 172.17.0.2:8080 send_file path file3.mf
 
 # Get tag
-172.17.0.3:8080 get_tag tag a
-172.17.0.3:8080 get_tag tag f
-172.17.0.3:8080 get_tag tag w
-172.17.0.3:8080 get_tag tag e
-172.17.0.3:8080 get_tag tag aa
-172.17.0.3:8080 get_tag tag ff
+172.17.0.2:8080 get_tag tag a
+172.17.0.2:8080 get_tag tag f
+172.17.0.2:8080 get_tag tag w
+172.17.0.2:8080 get_tag tag e
+172.17.0.2:8080 get_tag tag aa
+172.17.0.2:8080 get_tag tag ff
